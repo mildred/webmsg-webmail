@@ -1,0 +1,10 @@
+{{ define "main" }}
+  {{ partial "article" . }}
+  {{ if default true .Params.showindexlist }}
+    {{ range .Pages }}
+      <article>
+        <a href="{{.RelPermalink}}">{{.Date.Format "2006-01-02"}} | {{.Title}}</a>
+      </article>
+    {{ end }}
+  {{ end }}
+{{ end }}

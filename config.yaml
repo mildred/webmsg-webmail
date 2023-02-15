@@ -1,0 +1,4 @@
+baseURL: http://localhost:1313/
+title: Site Title
+relativeURLs: true
+

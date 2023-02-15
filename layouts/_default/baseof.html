@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="{{ site.Language }}" dir="{{ .Language.LanguageDirection | default "auto" }}">
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8"/>
+    {{ if .Params.redirect }}
+    {{ with .Site.GetPage (.Params.redirect) }}
+    <meta name="robots" content="noindex">
+    <meta http-equiv="refresh" content="0; url={{ .RelPermalink }}"/>
+    {{ end }}
+    {{ end }}
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ if .Title }}{{ .Title }} | {{ end }}{{ block "title" . }}{{ .Site.Title }}{{ end }}</title>
+
+    <!-- include first because it contains a CSS reset -->
+    <script>
+    </script>
+    <script type="module" src="/app/app.js"></script>
+    <link rel="stylesheet" href="/app/style.css" />
+
+    {{ with resources.Get "style.css" }}
+      <link rel="stylesheet" href="{{ .RelPermalink }}" />
+    {{ end }}
+  </head>
+  <body>
+  </body>
+</html>

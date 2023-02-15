@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+  <body>
+    <h1>Ok</h1>
+    <script>
+      const params = Array.from(
+        location.search.matchAll(/[^&\?]+/g),
+        p => p[0].match(/^([^=]*)=(.*)$/).slice(1).map(x => decodeURIComponent(x)))
+      window.opener.postMessage({
+        'hcms-oauth-popup': params
+      }, origin);
+      setTimeout(() => {
+        window.close()
+      }, 100)
+    </script>
+  </body>
+</html>
