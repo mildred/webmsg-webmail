@@ -1,5 +1,5 @@
-Svelte App template
-===================
+Webmsg Webmail
+==============
 
 Documentation
 -------------

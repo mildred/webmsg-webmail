@@ -38,7 +38,7 @@ export function combine(stores) {
     }
     return derived(store_arr, (args) => {
       const res = {}
-      for(const i = 0; i < names.length; i++) {
+      for(let i = 0; i < names.length; i++) {
         res[names[i]] = args[i]
       }
       return res

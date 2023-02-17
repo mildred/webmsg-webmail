@@ -1,6 +1,13 @@
 import './style.css'
 import 'purecss'
 import App from './App.svelte'
+import { router } from 'tinro';
+import { dayjs } from "svelte-time";
+import LocalizedFormat from 'dayjs/plugin/localizedFormat';
+
+router.mode.hash()
+
+dayjs.extend(LocalizedFormat)
 
 const app_div = document.createElement('div')
 
