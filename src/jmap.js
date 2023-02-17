@@ -242,6 +242,34 @@ class JMAPTransport {
       return new JMAPResponse(body)
     }
   }
+
+  async blob_data(accountId, blobId, name, type, filter) {
+    const charset = type.match(/charset=(\S*)/)[1]
+
+    const url = await this.jmap.blob_url({accountId, blobId, name, type})
+
+    const resp = await fetch(url, {
+      'headers': {
+        Authorization: await this.auth.get_authorization_header()
+      }
+    })
+    const blob = await resp.blob()
+
+    const text = await new Promise((accept, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        accept(reader.result)
+      }
+      reader.readAsText(blob, charset)
+    })
+
+    return filter ? filter(text, type) : text
+  }
+
+  async blob(accountId, blobId, name, type, filter) {
+    const text = await this.blob_data(accountId, blobId, name, type, filter)
+    return new Blob([text], {type: type})
+  }
 }
 
 export class JMAP {
@@ -252,11 +280,15 @@ export class JMAP {
     this.state_change_callbacks = []
   }
 
+  get session_url() {
+    return `${this.domain}/.well-known/jmap/`
+  }
+
   async request_session() {
     if (this.session) return this.session
 
     while(true) {
-      const res = await fetch(`${this.domain}/.well-known/jmap/`, {
+      const res = await fetch(this.session_url, {
         headers: { 'Authorization': await this.auth.get_authorization_header() }
       })
       if (res.status == 401) {
@@ -268,6 +300,24 @@ export class JMAP {
       console.log("[jmap] session = %o", body)
       return body
     }
+  }
+
+  async blob_url({accountId, blobId, name, type}) {
+    const session = await this.request_session()
+    return new URL(session.downloadUrl
+      .replace('{accountId}', encodeURIComponent(accountId))
+      .replace('{blobId}', encodeURIComponent(blobId))
+      .replace('{name}', encodeURIComponent(name || 'file.dat'))
+      .replace('{type}', encodeURIComponent(type || 'application/octet-stream')),
+      this.session_url)
+  }
+
+  async blob_data(accountId, blobId, name, type, filter) {
+    return await this.transport.blob_data(accountId, blobId, name, type, filter)
+  }
+
+  async blob(accountId, blobId, name, type, filter) {
+    return await this.transport.blob(accountId, blobId, name, type, filter)
   }
 
   async request(...args) {

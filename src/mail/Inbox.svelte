@@ -1,11 +1,13 @@
 <script>
   // vim: ft=html
-  import { readable, ready } from '../stores.js';
+  import { readable, ready, get } from '../stores.js';
+  import EmailBody from './EmailBody.svelte';
   import EmailIcon from './EmailIcon.svelte';
   import TimeAgo from 'svelte-timeago';
   import Time from "svelte-time";
-
-  export let ctx;
+  import SvgIcon from '@jamescoyle/svelte-icon';
+  import * as mdi from '@mdi/js';
+  import { ctx } from '../context.js'
 
   const threads = readable([], async (set) => {
     const { accountId, jmap } = await ready(ctx, ctx => ctx.ready)
@@ -39,6 +41,17 @@
     }
   })
 
+  let expandedEmailId = null
+
+  function showThread(article, email) {
+    if (expandedEmailId == email.id) {
+      expandedEmailId = null
+    } else {
+      expandedEmailId = email.id
+    }
+    console.log(email)
+  }
+
 </script>
 
 <style>
@@ -63,10 +76,30 @@ a {
 }
 
 article {
+  position: relative;
   display: flex;
   flex-flow: row nowrap;
   gap: 1em;
   margin: 1em 0;
+  pointer: cursor;
+}
+
+.icon {
+  position: relative;
+}
+
+.num-email {
+  width: 1.5em;
+  height: 1.5em;
+  border-radius: 1.5em;
+  line-height: 1.5em;
+  background-color: #000;
+  color: #fff;
+  text-align: center;
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  font-weight: bold;
 }
 
 .summary {
@@ -98,6 +131,41 @@ article {
   color: #888;
   flex: 0 0 auto;
   white-space: nowrap;
+  display: flex;
+  align-items: center;
+}
+
+article:not(:hover) > .filters {
+  display: none;
+}
+
+.filters {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background-color: white;
+  display: flex;
+  justify-content: flex-end;
+  flex-flow: row wrap;
+  width: 16rem;
+  flex: 0 0 16rem;
+}
+
+.filters > a {
+  display: block;
+  width: 7rem;
+  overflow: hidden;
+  white-space: nowrap;
+
+  margin: 0.25em;
+  background-color: #f8f8f8;
+  border-radius: 0.25em;
+  border: 1px solid #888;
+}
+
+.filters > a > svg {
+  width: 1em;
+  height: 1em;
 }
 
 </style>
@@ -106,9 +174,12 @@ article {
 <h1>Inbox</h1>
 
 {#each $threads as email}
-  <article>
+  <article on:click={e => showThread(e.target, email)}>
     <div class="icon">
       <EmailIcon name={email.from[0].name} email={email.from[0].email} />
+      {#if email.thread.emailIds.length > 1}
+        <div class="num-email">{email.thread.emailIds.length}</div>
+      {/if}
     </div>
     <a class="summary" href="javascript:void(0)">
       <div class="summary-content">
@@ -125,8 +196,16 @@ article {
         <Time timestamp={email.receivedAt} format="ddd MMM D H:mm" />
       </div>
     </a>
-    <slot name="actions" email={email}/>
+    <div class="filters">
+      <a href="#"><SvgIcon type='mdi' path={mdi.mdiHome} /> Home</a>
+      <a href="#"><SvgIcon type='mdi' path={mdi.mdiGhost} /> Hidden</a>
+      <a href="#"><SvgIcon type='mdi' path={mdi.mdiEmailNewsletter} /> News</a>
+      <a href="#"><SvgIcon type='mdi' path={mdi.mdiNoteMultiple} /> Background</a>
+    </div>
   </article>
+  {#if expandedEmailId == email.id}
+  <EmailBody email={email} show_header={false} />
+  {/if}
 {/each}
 
 </div>

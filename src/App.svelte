@@ -17,7 +17,7 @@
 
   <Route path="/" redirect="/mail/inbox" />
   <Route path="/mail/inbox">
-    <Inbox ctx={ctx} />
+    <Inbox />
   </Route>
 
 {/if}
