@@ -1,4 +1,11 @@
 import { writable, derived, get } from 'svelte/store';
+import { ready } from './stores.js'
+
+export class ConfigMailbox {
+  constructor(raw) {
+    this.raw = raw
+  }
+}
 
 export class Config {
   constructor(raw) {
@@ -8,7 +15,36 @@ export class Config {
   update_after_save(cfgUpdate) {
     Object.assign(this.raw, cfgUpdate)
   }
+
+  get mailboxes() {
+    const mailboxes = this.raw.mailboxes || [
+      {
+        name: 'Inbox',
+        role: 'Inbox',
+        description: 'All incoming mail goes here before filtering'
+      },
+      {
+        name: 'Home',
+        description: 'Important mail to see first'
+      },
+      {
+        name: 'Hidden',
+        description: 'Less than important mail'
+      },
+      {
+        name: 'News',
+        description: 'News to read any time'
+      },
+      {
+        name: 'Robots',
+        description: 'Less important automated e-mails sent by robots'
+      }
+    ]
+    return mailboxes.map(raw => new ConfigMailbox(raw))
+  }
 }
+
+// export const config = newConfigStore()
 
 export function newConfigStore(ctx) {
   let prevent_save = false
@@ -50,32 +86,11 @@ async function load_and_subscribe_config(ctx, set) {
 }
 
 async function load_config(ctx) {
-  const {jmap, accountId} = ctx
-  const resp = await jmap.request([
-    ['Mailbox/query', {
-      accountId,
-      filter: {
-        parentId: null,
-        role: 'Drafts'
-      }
-    }, '0'],
-    /*
-    ['Email/query', {
-      accountId,
-      filter: {
-        '#inMailbox': { resultOf: '0', name: 'Mailbox/query', path: '/ids/0'},
-        header: ['X-Webmsg-Webmail-Config', 'v1']
-      }
-    }, '1'],
-    ['Email/get', {
-      accountId,
-      '#ids': { resultOf: '1', name: 'Email/query', path: '/ids' },
-      fetchTextBodyValues: true
-    }, '2']
-    */
-  ])
+  const {jmap, accountId, mailbox_roles} = ctx
 
-  const has_drafts_mailbox = resp.get('Mailbox/query').ids.length > 0
+  const { role_ids } = await ready(mailbox_roles, data => data.role_ids)
+
+  const has_drafts_mailbox = role_ids['Drafts'].length > 0
 
   // Create the drafts mailbox if it does not exists
   // This also means there is no config, so stop there
@@ -108,7 +123,7 @@ async function load_config(ctx) {
     return raw_config
   }
 
-  const mailbox_id = resp.get('Mailbox/query').ids[0]
+  const mailbox_id = role_ids['Drafts'][0]
 
   const resp2 = await jmap.request([
     ['Email/query', {

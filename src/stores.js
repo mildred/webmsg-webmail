@@ -2,6 +2,8 @@ import { writable, derived, get } from 'svelte/store';
 
 const prefix = 'app'
 
+export const jmap = writable(null)
+
 export const session = writable({
   default_value: true,
   ...JSON.parse(sessionStorage.getItem(`${prefix}.session`) || '{}')
@@ -21,6 +23,17 @@ local.subscribe(opts => {
 })
 
 export { get, derived }
+
+export async function ready(store, predicate) {
+  return await new Promise((accept, reject) => {
+    const unsubscribe = store.subscribe(data => {
+      if (predicate ? predicate(data) : data) {
+        unsubscribe()
+        accept(data)
+      }
+    })
+  })
+}
 
 export function combine(stores) {
   if (stores.subscribe) {
