@@ -175,6 +175,7 @@ class JMAPTransport {
     this.websockets_started = true
 
     return // No way to set authorization header
+    /*
 
     if (!session.capabilities["urn:ietf:params:jmap:websocket"]) return
 
@@ -189,6 +190,7 @@ class JMAPTransport {
     this.websockets.addEventListener('message', (e) => {
       const { data } = e
     })
+    */
   }
 
   async init_eventsource(session, types, single_event, ping) {
@@ -263,6 +265,7 @@ export class JMAP {
       }
       const body = await res.json()
       this.session = body
+      console.log("[jmap] session = %o", body)
       return body
     }
   }

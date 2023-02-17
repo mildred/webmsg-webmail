@@ -1,5 +1,6 @@
 import { writable, derived, get } from 'svelte/store';
-import { ready } from './stores.js'
+import { fancy, ready, jmap, Inhibitor } from './stores.js'
+import { mailbox_roles } from './mailboxes.js'
 
 export class ConfigMailbox {
   constructor(raw) {
@@ -8,12 +9,17 @@ export class ConfigMailbox {
 }
 
 export class Config {
-  constructor(raw) {
+  constructor(raw, required_props) {
     this.raw = raw || {}
+    if (required_props) Object.assign(this, required_props)
   }
 
   update_after_save(cfgUpdate) {
     Object.assign(this.raw, cfgUpdate)
+  }
+
+  get loaded() {
+    return this.raw.accountId == this.raw.loadedAccountId
   }
 
   get mailboxes() {
@@ -44,49 +50,75 @@ export class Config {
   }
 }
 
-// export const config = newConfigStore()
+export const config = newConfigStore(jmap, mailbox_roles)
 
-export function newConfigStore(ctx) {
-  let prevent_save = false
+export function newConfigStore(jmap, mailbox_roles) {
+  const save = new Inhibitor()
+  let prevent_save = 0
 
-  const store = writable(new Config(), set => {
-    let unsubscribe = () => {
-      unsubscribe = null
-    }
-
-    load_and_subscribe_config(ctx, set_no_loop).then(unsub => {
-      if (unsubscribe === null) unsub()
-      else unsubscribe = unsub
+  const store = fancy(new Config())
+    .validates(value => (value instanceof Config))
+    .validates(value => {
+      console.log(value)
+      return true
     })
 
-    function set_no_loop(...args) {
-      prevent_save = true
-      const res = set(...args)
-      prevent_save = false
-      return res
-    }
+  // Save config to JMAP email when it changes
+  store.derive(async (config, update) => {
+    if (save.inhibited) return
+    const $jmap = await ready(jmap)
 
-    return unsubscribe
+    // Do not save the config if the store is not already initialized with an
+    // accountId
+    const { accountId } = config.raw
+    if (!accountId) return;
+
+    console.log("[config] save config")
+    const cfgUpdate = await save_config($jmap, accountId, mailbox_roles, config.raw)
+    // avoid calling set on the store, no need to notify subscribers
+    // this is also to avoid loops
+    config.update_after_save(cfgUpdate)
   })
 
-  store.subscribe(config => {
-    if (!prevent_save) {
-      save_config(ctx, config.raw).then(cfgUpdate => config.update_after_save(cfgUpdate))
-    }
+  // Fetch initial config when the accountId is set
+  store.derive(async (config, update_set) => {
+    const {accountId, loadedAccountId} = config.raw
+    if (!accountId || accountId == loadedAccountId) return;
+
+    const $jmap = await ready(jmap)
+    console.log("[config] initial config fetch", accountId, loadedAccountId)
+    const raw_config = await load_config($jmap, accountId, mailbox_roles)
+    save.inhibit(() => {
+      // Unconditionally set config to what we got from JMAP
+      // This will drop any changes made to the config during the initial load
+      // (there should not be any)
+      const new_config = new Config(raw_config, {
+        accountId,
+      })
+      console.log("[config] initial config load")
+      update_set(new_config)
+    })
+
+    store.init(async (config, update_set) => {
+      const {accountId} = config.raw
+      return await subscribe_config($jmap, accountId, config.raw, new_val => {
+        save.inhibit(() => {
+          // Unconditionally set config to what we got from JMAP
+          // This will drop any changes made to the config if there is a change on
+          // the server. Most probably changes are saved first.
+          console.log("[config] load config (server change)")
+          update_set(new Config(raw_config, {
+            accountId,
+          }))
+        })
+      })
+    })
   })
 
   return store
 }
 
-async function load_and_subscribe_config(ctx, set) {
-  const raw_config = await load_config(ctx)
-  set(new Config(raw_config))
-
-  return await subscribe_config(ctx, raw_config, set)
-}
-
-async function load_config(ctx) {
-  const {jmap, accountId, mailbox_roles} = ctx
+async function load_config(jmap, accountId, mailbox_roles) {
 
   const { role_ids } = await ready(mailbox_roles, data => data.role_ids)
 
@@ -118,7 +150,7 @@ async function load_config(ctx) {
 
     console.log("[config] start with an empty config %o", raw_config)
 
-    await save_config(ctx, raw_config, {})
+    await save_config(jmap, accountId, mailbox_roles, raw_config, {})
 
     return raw_config
   }
@@ -150,6 +182,8 @@ async function load_config(ctx) {
   const raw_config = {
     ...data,
     loaded: !!state,
+    accountId,
+    loadedAccountId: accountId,
     configState: state,
     configId: id,
     configBlobId: blobId,
@@ -161,7 +195,7 @@ async function load_config(ctx) {
   return raw_config
 }
 
-async function subscribe_config({jmap, accountId}, {configState, configMailboxId}, set) {
+async function subscribe_config(jmap, accountId, {configState, configMailboxId}, set) {
   let state = configState
   const clear = await jmap.get_state_changes(async (data) => {
     const changed = data.changed[accountId] || {}
@@ -190,8 +224,7 @@ async function subscribe_config({jmap, accountId}, {configState, configMailboxId
   }
 }
 
-async function save_config(ctx, config, actual_config) {
-  const { jmap, accountId } = ctx
+async function save_config(jmap, accountId, mailbox_roles, config, actual_config) {
   const { configBlobId, configState, loaded, configMailboxId } = config
 
   // Do not save a config that was never loaded
@@ -203,7 +236,7 @@ async function save_config(ctx, config, actual_config) {
   //
   // If we subscribe to config, this should never happen
 
-  if (!actual_config) actual_config = await load_config(ctx)
+  if (!actual_config) actual_config = await load_config(jmap, accountId, mailbox_roles)
   if (actual_config.configBlobId && actual_config.configBlobId != configBlobId) {
     throw `Configuration mismatch blob ${actual_config.configBlobId} (actual) != ${configBlobId} (memory)`
   }

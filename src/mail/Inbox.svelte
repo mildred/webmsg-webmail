@@ -1,6 +1,6 @@
 <script>
   // vim: ft=html
-  import { readable } from 'svelte/store';
+  import { readable, ready } from '../stores.js';
   import EmailIcon from './EmailIcon.svelte';
   import TimeAgo from 'svelte-timeago';
   import Time from "svelte-time";
@@ -8,7 +8,7 @@
   export let ctx;
 
   const threads = readable([], async (set) => {
-    const { accountId, jmap } = ctx
+    const { accountId, jmap } = await ready(ctx, ctx => ctx.ready)
     const resp = await jmap.request([
       ['Email/query', {
         accountId,
