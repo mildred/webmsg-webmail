@@ -2,7 +2,7 @@
 <html>
   <body>
     <h1>Ok</h1>
-    <p>You are logged-in, this window will close in 5 seconds.</p>
+    <p>You are logged-in, this window will close.</p>
     <script>
       const params = Array.from(
         location.search.matchAll(/[^&\?]+/g),
@@ -10,9 +10,7 @@
       window.opener.postMessage({
         'oauth-response': params
       }, origin);
-      setTimeout(() => {
-        window.close()
-      }, 5000)
+      window.close()
     </script>
   </body>
 </html>

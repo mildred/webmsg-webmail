@@ -1,7 +1,7 @@
 <script>
   // vim: ft=html
 
-  import { ready } from '../utils/stores.js';
+  import { ready } from '../utils/store.js';
   import { mounted } from '../utils/mount.js';
   import { purify } from '../utils/purify.js';
   import { onMount } from 'svelte';
@@ -73,7 +73,7 @@
 
     let doc = await body
 
-    console.log("[EmailBody] got body", doc)
+    // console.log("[EmailBody] got body", doc)
 
     // const charset = doc.match(/charset=['"]([^"']*)/)[1]
     let blob = new Blob([doc], {type : 'text/html; charset=url-8'});

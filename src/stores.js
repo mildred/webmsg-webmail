@@ -1,5 +1,5 @@
 import { writable, derived, get } from 'svelte/store';
-export * from './utils/stores.js';
+export * from './utils/store.js';
 
 const prefix = 'app'
 

@@ -1,4 +1,5 @@
 import './style.css'
+import './ui.css'
 import 'purecss'
 import App from './App.svelte'
 import { router } from 'tinro';

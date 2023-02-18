@@ -3,6 +3,7 @@
   import { readable, ready, get } from '../stores.js';
   import EmailBody from './EmailBody.svelte';
   import EmailIcon from './EmailIcon.svelte';
+  import InboxFilterDialog from './InboxFilterDialog.svelte'
   import TimeAgo from 'svelte-timeago';
   import Time from "svelte-time";
   import SvgIcon from '@jamescoyle/svelte-icon';
@@ -42,6 +43,7 @@
   })
 
   let expandedEmailId = null
+  let filterEmailId = null
 
   function showThread(article, email) {
     if (expandedEmailId == email.id) {
@@ -49,10 +51,52 @@
     } else {
       expandedEmailId = email.id
     }
-    console.log(email)
   }
 
 </script>
+
+<div class="main">
+<h1>Inbox</h1>
+
+{#each $threads as email}
+  <article on:click={e => showThread(e.target, email)}>
+    <div class="icon">
+      <EmailIcon name={email.from[0].name} email={email.from[0].email} />
+      {#if email.thread.emailIds.length > 1}
+        <div class="num-email">{email.thread.emailIds.length}</div>
+      {/if}
+    </div>
+    <a class="summary" href="javascript:void(0)">
+      <div class="summary-content">
+        <div class="first-line">
+          <span class="subject">{email.subject}</span>
+        </div>
+        <div class="second-line">
+          <span class="author">{email.from[0].name}</span>
+          –
+          <span class="preview">{email.preview}</span>
+        </div>
+      </div>
+      <div class="date" title={email.receivedAt}>
+        <Time timestamp={email.receivedAt} format="ddd MMM D H:mm" />
+      </div>
+    </a>
+    <div class="filters" on:click={e => {e.stopPropagation(); filterEmailId = email.id}}>
+      <a href="#"><SvgIcon type='mdi' path={mdi.mdiHome} /> Home</a>
+      <a href="#"><SvgIcon type='mdi' path={mdi.mdiGhost} /> Hidden</a>
+      <a href="#"><SvgIcon type='mdi' path={mdi.mdiEmailNewsletter} /> News</a>
+      <a href="#"><SvgIcon type='mdi' path={mdi.mdiNoteMultiple} /> Background</a>
+    </div>
+  </article>
+  {#if filterEmailId == email.id}
+    <InboxFilterDialog on:close={e => {filterEmailId = null}} email={email} />
+  {/if}
+  {#if expandedEmailId == email.id}
+    <EmailBody email={email} show_header={false} />
+  {/if}
+{/each}
+
+</div>
 
 <style>
 
@@ -169,44 +213,4 @@ article:not(:hover) > .filters {
 }
 
 </style>
-
-<div class="main">
-<h1>Inbox</h1>
-
-{#each $threads as email}
-  <article on:click={e => showThread(e.target, email)}>
-    <div class="icon">
-      <EmailIcon name={email.from[0].name} email={email.from[0].email} />
-      {#if email.thread.emailIds.length > 1}
-        <div class="num-email">{email.thread.emailIds.length}</div>
-      {/if}
-    </div>
-    <a class="summary" href="javascript:void(0)">
-      <div class="summary-content">
-        <div class="first-line">
-          <span class="subject">{email.subject}</span>
-        </div>
-        <div class="second-line">
-          <span class="author">{email.from[0].name}</span>
-          –
-          <span class="preview">{email.preview}</span>
-        </div>
-      </div>
-      <div class="date" title={email.receivedAt}>
-        <Time timestamp={email.receivedAt} format="ddd MMM D H:mm" />
-      </div>
-    </a>
-    <div class="filters">
-      <a href="#"><SvgIcon type='mdi' path={mdi.mdiHome} /> Home</a>
-      <a href="#"><SvgIcon type='mdi' path={mdi.mdiGhost} /> Hidden</a>
-      <a href="#"><SvgIcon type='mdi' path={mdi.mdiEmailNewsletter} /> News</a>
-      <a href="#"><SvgIcon type='mdi' path={mdi.mdiNoteMultiple} /> Background</a>
-    </div>
-  </article>
-  {#if expandedEmailId == email.id}
-  <EmailBody email={email} show_header={false} />
-  {/if}
-{/each}
-
-</div>
 

@@ -81,16 +81,15 @@ export function fancy(def_value, start) {
   let   starting     = false
   const starts       = [start]
   const unsubscribes = []
+  let   countdown    = 1000 // recursivity protection
+
 
   const store = writable(def_value, (set) => {
     starting = true
+    // countdown = 1000
     for(const start of starts) {
       if(! start) continue
-      sync_resolve(start(set), unsub => {
-        if (!unsub) return
-        if (starting || started) unsubscribes.push(unsub)
-        else call_unsubscribe(unsub)
-      })
+      add_finalizer(start(set))
     }
 
     // Once all start functions are called, declare the store started
@@ -109,7 +108,7 @@ export function fancy(def_value, start) {
   })
 
   store.init = function(cb) {
-    starts.push(set => {
+    start = (set) => {
       const update = (arg, ...args) => {
         if (typeof arg == 'function') {
           return store.update(arg, ...args)
@@ -117,43 +116,38 @@ export function fancy(def_value, start) {
           return set(arg, ...args)
         }
       }
-      return cb(get(store), update, set)
-    })
+
+      update.update        = store.update.bind(store)
+      update.set           = set
+      update.add_finalizer = add_finalizer
+      update.derive        = (...args) => add_finalizer(derive(update, ...args))
+
+      return cb(get(store), update)
+    }
+
+    starts.push(start)
 
     // If already started, start manually
     if (started) {
-      sync_resolve(starts[starts.length-1](store.set.bind(store)), unsub => {
-        if (!unsub) return
-        if (starting || started) unsubscribes.push(unsub)
-        else call_unsubscribe(unsub)
-      })
+      add_finalizer(start(store.set.bind(store)))
     }
+
+    return store
   }
 
   store.derive = function(parent_store, cb){
-    if (typeof parent_store == 'function') {
-      cb = parent_store
-      parent_store = null
-    } else if (parent_store instanceof Array) {
-      parent_store = derived(parent_store, x => x)
-    }
+    store.init((_, update) => {
+      return derive(update, parent_store, cb)
+    })
+    return store
+  }
 
-    if (parent_store == null) {
-      store.init((_, update, set) => {
-        return store.subscribe(data => {
-          const res = cb(data, update)
-          if (res !== undefined && ! (res instanceof Promise)) set(res)
-        })
-      })
-    } else {
-      store.init((_, update, set) => {
-        return parent_store.subscribe(async parent_data => { 
-          const res = cb(get(store), parent_data, update)
-          if (res !== undefined && ! (res instanceof Promise)) set(res)
-        })
-      })
+  store.log = function(cb) {
+    const set = store.set.bind(store)
+    store.set = function(...args) {
+      cb(...args)
+      return set(...args)
     }
-
     return store
   }
 
@@ -168,17 +162,48 @@ export function fancy(def_value, start) {
 
   return store
 
+  function derive(update, parent_store, cb) {
+    if (typeof parent_store == 'function') {
+      cb = parent_store
+      parent_store = null
+    } else if (parent_store instanceof Array) {
+      parent_store = derived(parent_store, x => x)
+    }
+
+    if (parent_store == null) {
+      return store.subscribe(data => {
+        const res = cb(data, update)
+        if (res !== undefined && ! (res instanceof Promise)) update.set(res)
+      })
+    } else {
+      return parent_store.subscribe(async parent_data => { 
+        const res = cb(get(store), parent_data, update)
+        if (res !== undefined && ! (res instanceof Promise)) update.set(res)
+      })
+    }
+  }
+
   function call_unsubscribe(unsub){
     if (unsub?.unsubscribe) return unsub.unsubscribe()
     else if (unsub) return unsub()
   }
 
   function sync_resolve(promise, cb) {
+    if(countdown-- <= 0) throw "countdown"
     if (promise instanceof Promise) {
       promise.then(cb)
     } else {
       cb(promise)
     }
+  }
+
+  function add_finalizer(promise_unsub) {
+    if(countdown-- <= 0) throw "countdown"
+    sync_resolve(promise_unsub, unsub => {
+      if (!unsub) return
+      if (starting || started) unsubscribes.push(unsub)
+      else call_unsubscribe(unsub)
+    })
   }
 }
 

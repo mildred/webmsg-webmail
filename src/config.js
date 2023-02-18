@@ -6,11 +6,23 @@ export class ConfigMailbox {
   constructor(raw) {
     this.raw = raw
   }
+
+  get filters() {
+    this.raw.filters ||= {
+      from: [],
+      to: [],
+      cc: [],
+      bcc: [],
+      delivered_to: [],
+    }
+    return this.raw.filters
+  }
 }
 
 export class Config {
-  constructor(raw, required_props) {
+  constructor(raw, required_props, { role_ids } = {}) {
     this.raw = raw || {}
+    this.role_ids = role_ids
     if (required_props) Object.assign(this, required_props)
   }
 
@@ -23,7 +35,7 @@ export class Config {
   }
 
   get mailboxes() {
-    const mailboxes = this.raw.mailboxes || [
+    this.raw.mailboxes ||= [
       {
         name: 'Inbox',
         role: 'Inbox',
@@ -46,7 +58,7 @@ export class Config {
         description: 'Less important automated e-mails sent by robots'
       }
     ]
-    return mailboxes.map(raw => new ConfigMailbox(raw))
+    return this.raw.mailboxes.map(raw => new ConfigMailbox(raw))
   }
 }
 
@@ -86,15 +98,18 @@ export function newConfigStore(jmap, mailbox_roles) {
     if (!accountId || accountId == loadedAccountId) return;
 
     const $jmap = await ready(jmap)
+    const $mailbox_roles = await ready(mailbox_roles, data => data.role_ids)
+
     console.log("[config] initial config fetch", accountId, loadedAccountId)
     const raw_config = await load_config($jmap, accountId, mailbox_roles)
+
     save.inhibit(() => {
       // Unconditionally set config to what we got from JMAP
       // This will drop any changes made to the config during the initial load
       // (there should not be any)
       const new_config = new Config(raw_config, {
         accountId,
-      })
+      }, $mailbox_roles)
       console.log("[config] initial config load")
       update_set(new_config)
     })
@@ -109,7 +124,7 @@ export function newConfigStore(jmap, mailbox_roles) {
           console.log("[config] load config (server change)")
           update_set(new Config(raw_config, {
             accountId,
-          }))
+          }, $mailbox_roles))
         })
       })
     })
@@ -225,7 +240,7 @@ async function subscribe_config(jmap, accountId, {configState, configMailboxId},
 }
 
 async function save_config(jmap, accountId, mailbox_roles, config, actual_config) {
-  const { configBlobId, configState, loaded, configMailboxId } = config
+  let { configBlobId, configState, loaded, configMailboxId } = config
 
   // Do not save a config that was never loaded
   if (!loaded) return

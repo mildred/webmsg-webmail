@@ -13,16 +13,30 @@ class OAuthClient {
   get_from_store() {
     if (!this.store) return
 
-    const unsubscribe = this.store.subscribe(data => {
-      this.access_token = data.oauth_access_token
-      this.token_type = data.oauth_token_type
-      this.access_token_limit = new Date(data.oauth_access_token_limit)
-      this.refresh_token = data.oauth_refresh_token
-    })
-    unsubscribe()
+    const data = get(this.store)
+    console.log("[oauth] get tokens from store", data)
+
+    this.access_token = data.oauth_access_token
+    this.token_type = data.oauth_token_type
+    this.access_token_limit = new Date(data.oauth_access_token_limit)
+    this.refresh_token = data.oauth_refresh_token
   }
 
   async handle_unauthorized(res) {
+    if (this.access_token_limit < new Date()) {
+      console.log("[oauth] Received unauthorized, refresh token", this)
+      await this.oauth_get_token({
+        'grant_type':    'refresh_token',
+        'refresh_token': this.refresh_token
+      })
+    } else {
+      console.log("[oauth] Received unauthorized, issue new login", this)
+      return await this.login()
+    }
+  }
+
+  async handle_unauthorized_get_token(res) {
+    console.log("[oauth] Received unauthorized while requesting a new token, issue new login", this)
     return await this.login()
   }
 
@@ -99,32 +113,50 @@ class OAuthClient {
   }
 
   async oauth_get_token(params) {
-    this.oauth_metadata ||= await this.request_oauth_metadata()
-    const now = new Date()
+    while (true) {
+      this.oauth_metadata ||= await this.request_oauth_metadata()
+      const now = new Date()
 
-    const resp = await fetch(this.oauth_metadata.token_endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        'client_id': this.oauth_client_id,
-        ...params
+      const resp = await fetch(this.oauth_metadata.token_endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          'client_id': this.oauth_client_id,
+          ...params
+        })
       })
-    })
 
-    const tokens = await resp.json()
-    const limit = now.getTime() + tokens.expires_in * 1000 - 60000
-    this.access_token = tokens.access_token
-    this.token_type = tokens.token_type
-    this.access_token_limit = new Date(limit)
-    this.refresh_token = tokens.refresh_token
+      if (resp.status == 401) {
+        await this.handle_unauthorized_get_token(resp)
+        continue
+      }
 
-    if (this.store) this.store.update(data => ({
-      ...data,
-      oauth_access_token: tokens.access_token,
-      oauth_token_type: tokens.token_type,
-      oauth_access_token_limit: limit,
-      oauth_refresh_token: tokens.refresh_token
-    }))
+      if (resp.status != 200) {
+        console.error('[oauth] Failed to get tokens', await resp.json())
+        continue
+      }
+
+      const tokens = await resp.json()
+      const limit = now.getTime() + tokens.expires_in * 1000 - 60000
+      this.access_token = tokens.access_token
+      this.token_type = tokens.token_type
+      this.access_token_limit = new Date(limit)
+      this.refresh_token = tokens.refresh_token
+
+      console.log('[oauth] Got new tokens', tokens, this)
+
+      if (this.store) {
+        this.store.update(data => ({
+          ...data,
+          oauth_access_token: tokens.access_token,
+          oauth_token_type: tokens.token_type,
+          oauth_access_token_limit: limit,
+          oauth_refresh_token: tokens.refresh_token
+        }))
+        console.log('[oauth] Got new tokens in store', get(this.store))
+      }
+      return
+    }
   }
 
   async get_authorization_header() {
@@ -133,6 +165,7 @@ class OAuthClient {
       await this.login()
     }
     if (this.access_token_limit < new Date()) {
+      console.log("[oauth] Refresh token")
       await this.oauth_get_token({
         'grant_type':    'refresh_token',
         'refresh_token': this.refresh_token
@@ -335,14 +368,20 @@ export class JMAP {
     const index = this.state_change_callbacks.length
     this.state_change_callbacks.push(callback)
     await this.transport.init_eventsource(session)
-    return index
+    const clear = () => {this.clear_get_state_changes(index)}
+    clear.index = index
+    clear.callback = callback
   }
 
   clear_get_state_changes(index_or_callback) {
-    const index = typeof(index_or_callback) == 'number' ?
-      index_or_callback :
-      this.state_change_callbacks.indexOf(index_or_callback)
-    delete this.state_change_callbacks[index]
+    if (typeof(index_or_callback) == 'number') {
+      delete this.state_change_callbacks[index]
+    } else if (this.state_change_callbacks[index_or_callback.index] === index_or_callback.callback) {
+      delete this.state_change_callbacks[index_or_callback.index]
+    } else {
+      const index = this.state_change_callbacks.indexOf(index_or_callback)
+      delete this.state_change_callbacks[index]
+    }
   }
 
   dispatch_state_changes(data){
