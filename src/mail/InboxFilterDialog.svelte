@@ -5,12 +5,14 @@
   import { mailboxes } from '../mailboxes.js'
   import { createEventDispatcher } from 'svelte';
   import { ctx } from '../context.js'
+  import { config } from '../config.js'
   import {
     Dialog,
     DialogOverlay,
     DialogTitle,
     DialogDescription,
   } from "@rgossiaux/svelte-headlessui";
+  import { BarLoader } from 'svelte-loading-spinners';
 
   export let email = {};
 
@@ -77,9 +79,19 @@
     isOpen = false
   }
 
+  let filter_criteria
+  let filter_mailbox
+
   function accept(){
     dispatch('accept')
-    isOpen = false
+    config.update($config => {
+      const [header, email] = filter_criteria.split(':')
+      console.log('[InboxFilterDialog] Add filter', header, email, filter_mailbox)
+      console.log('[InboxFilterDialog] new config', $config)
+      $config.add_address_mailbox_filter(header, email, filter_mailbox)
+      return $config
+    })
+    return close()
   }
 
   async function addMailbox() {
@@ -110,22 +122,26 @@
   <div class="ui-dialog-content">
     <DialogTitle class="ui-dialog-title">Filter message</DialogTitle>
 
+    {#if $dests.length == 0}
+      <center><BarLoader/></center>
+    {:else}
     <p>
       Filter messages
-      <select>
+      <select bind:value={filter_criteria}>
         {#each $headers as option}
           <option value={option.value}>{option.text}</option>
         {/each}
       </select>
       <br/>
       to
-      <select>
+      <select bind:value={filter_mailbox}>
         {#each $dests as option}
           <option value={option.value}>{option.text}</option>
         {/each}
       </select>
       <button on:click={addMailbox}> add... </button>
     </p>
+    {/if}
 
     <div class="ui-dialog-buttons">
       <button on:click={close}> Cancel </button>

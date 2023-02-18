@@ -30,6 +30,13 @@ export class Config {
     Object.assign(this.raw, cfgUpdate)
   }
 
+  add_address_mailbox_filter(header, address, mailbox) {
+    this.raw.filters ||= []
+    this.raw.filters[header] ||= {}
+    this.raw.filters[header][address] ||= {}
+    this.raw.filters[header][address].mailboxId = mailbox
+  }
+
   get loaded() {
     return this.raw.accountId == this.raw.loadedAccountId
   }
@@ -64,6 +71,12 @@ export class Config {
 
 export const config = newConfigStore(jmap, mailbox_roles)
 
+export const config_store = new Proxy({}, {
+  get(target, name, receiver) {
+    return newConfigStore(jmap, name)
+  }
+})
+
 export function newConfigStore(jmap, mailbox_roles) {
   const save = new Inhibitor()
   let prevent_save = 0
@@ -71,7 +84,7 @@ export function newConfigStore(jmap, mailbox_roles) {
   const store = fancy(new Config())
     .validates(value => (value instanceof Config))
     .validates(value => {
-      console.log(value)
+      console.log('[config] detect change', value)
       return true
     })
 
@@ -95,7 +108,11 @@ export function newConfigStore(jmap, mailbox_roles) {
   // Fetch initial config when the accountId is set
   store.derive(async (config, update_set) => {
     const {accountId, loadedAccountId} = config.raw
-    if (!accountId || accountId == loadedAccountId) return;
+    if (!accountId) {
+      console.log('[config] waiting for accountId in', config.raw)
+      return;
+    }
+    if (accountId == loadedAccountId) return;
 
     const $jmap = await ready(jmap)
     const $mailbox_roles = await ready(mailbox_roles, data => data.role_ids)

@@ -133,6 +133,7 @@ class OAuthClient {
 
       if (resp.status != 200) {
         console.error('[oauth] Failed to get tokens', await resp.json())
+        throw new Error('[oauth] Failed to get tokens');
         continue
       }
 
@@ -164,12 +165,17 @@ class OAuthClient {
     if (! this.access_token) {
       await this.login()
     }
-    if (this.access_token_limit < new Date()) {
-      console.log("[oauth] Refresh token")
-      await this.oauth_get_token({
-        'grant_type':    'refresh_token',
-        'refresh_token': this.refresh_token
-      })
+    try {
+      if (this.access_token_limit < new Date()) {
+        console.log("[oauth] Refresh token")
+        await this.oauth_get_token({
+          'grant_type':    'refresh_token',
+          'refresh_token': this.refresh_token
+        })
+      }
+    } catch (e) {
+      console.error(e)
+      await this.login()
     }
     return `${this.token_type} ${this.access_token}`
   }

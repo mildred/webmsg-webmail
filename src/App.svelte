@@ -7,12 +7,16 @@
   import { newConfigStore } from './config.js';
   import { mailbox_roles } from './mailboxes.js'
   import { ctx } from './context.js'
+  import { BarLoader } from 'svelte-loading-spinners';
 
   jmap.set(new JMAP('https://test2.mx.webmsg.me', session))
 </script>
 
 {#if ! $ctx.ready}
-  Connecting to the server...
+  <main class="loading">
+    <BarLoader/>
+    <p>Connecting to the server...</p>
+  </main>
 {:else}
 
   <Route path="/" redirect="/mail/inbox" />
@@ -22,4 +26,13 @@
 
 {/if}
 
-
+<style>
+main.loading {
+  display: flex;
+  flex-flow: column nowrap;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+}
+</style>
