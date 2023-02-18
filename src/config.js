@@ -2,146 +2,104 @@ import { writable, derived, get } from 'svelte/store';
 import { fancy, ready, jmap, Inhibitor } from './stores.js'
 import { mailbox_roles } from './mailboxes.js'
 
-export class ConfigMailbox {
-  constructor(raw) {
-    this.raw = raw
-  }
-
-  get filters() {
-    this.raw.filters ||= {
-      from: [],
-      to: [],
-      cc: [],
-      bcc: [],
-      delivered_to: [],
-    }
-    return this.raw.filters
-  }
-}
-
 export class Config {
-  constructor(raw, required_props, { role_ids } = {}) {
-    this.raw = raw || {}
-    this.role_ids = role_ids
-    if (required_props) Object.assign(this, required_props)
+  constructor(store, mailbox_roles) {
+    if (store instanceof Config) throw "bug"
+
+    this.store = store
+    console.log("[config] new Config() config = %o", get(store))
+    store.subscribe(data => {
+      console.log("[config] new Config() config changed = %o", get(store))
+    })
   }
 
-  update_after_save(cfgUpdate) {
-    Object.assign(this.raw, cfgUpdate)
+  get config() {
+    return get(this.store)
+  }
+
+  subscribe(cb) {
+    return this.store.subscribe(config => cb(this))
+  }
+
+  get loaded(){
+    return this.config.loaded
   }
 
   add_address_mailbox_filter(header, address, mailbox) {
-    this.raw.filters ||= []
-    this.raw.filters[header] ||= {}
-    this.raw.filters[header][address] ||= {}
-    this.raw.filters[header][address].mailboxId = mailbox
-  }
-
-  get loaded() {
-    return this.raw.accountId == this.raw.loadedAccountId
-  }
-
-  get mailboxes() {
-    this.raw.mailboxes ||= [
-      {
-        name: 'Inbox',
-        role: 'Inbox',
-        description: 'All incoming mail goes here before filtering'
-      },
-      {
-        name: 'Home',
-        description: 'Important mail to see first'
-      },
-      {
-        name: 'Hidden',
-        description: 'Less than important mail'
-      },
-      {
-        name: 'News',
-        description: 'News to read any time'
-      },
-      {
-        name: 'Robots',
-        description: 'Less important automated e-mails sent by robots'
-      }
-    ]
-    return this.raw.mailboxes.map(raw => new ConfigMailbox(raw))
+    this.store.update(config => {
+      config.filters ||= []
+      config.filters[header] ||= {}
+      config.filters[header][address] ||= {}
+      config.filters[header][address].mailboxId = mailbox
+      return config
+    })
   }
 }
 
-export const config = newConfigStore(jmap, mailbox_roles)
-
-export const config_store = new Proxy({}, {
-  get(target, name, receiver) {
-    return newConfigStore(jmap, name)
+export const config = new Proxy({}, {
+  get(target, accountId) {
+    target[accountId] ||= new Config(config_store[accountId], mailbox_roles)
+    return target[accountId] 
   }
 })
 
-export function newConfigStore(jmap, mailbox_roles) {
+export const config_store = new Proxy({}, {
+  get(target, accountId) {
+    target[accountId] ||= newConfigStore(jmap, mailbox_roles, accountId)
+    return target[accountId] 
+  }
+})
+
+export function newConfigStore(jmap, mailbox_roles, accountId) {
+  if (!accountId) throw new Error('missing accountId')
   const save = new Inhibitor()
   let prevent_save = 0
 
-  const store = fancy(new Config())
-    .validates(value => (value instanceof Config))
-    .validates(value => {
-      console.log('[config] detect change', value)
-      return true
-    })
+  const store = fancy({})
+
+  store.validates(config => config)
 
   // Save config to JMAP email when it changes
   store.derive(async (config, update) => {
     if (save.inhibited) return
     const $jmap = await ready(jmap)
 
-    // Do not save the config if the store is not already initialized with an
-    // accountId
-    const { accountId } = config.raw
-    if (!accountId) return;
-
-    console.log("[config] save config")
-    const cfgUpdate = await save_config($jmap, accountId, mailbox_roles, config.raw)
+    console.log("[config %s] save config", accountId)
+    const cfgUpdate = await save_config($jmap, accountId, mailbox_roles, config)
     // avoid calling set on the store, no need to notify subscribers
-    // this is also to avoid loops
-    config.update_after_save(cfgUpdate)
+    // this is also to avoid loops. Modify the object in place.
+    Object.assign(config, cfgUpdate)
   })
 
-  // Fetch initial config when the accountId is set
-  store.derive(async (config, update_set) => {
-    const {accountId, loadedAccountId} = config.raw
-    if (!accountId) {
-      console.log('[config] waiting for accountId in', config.raw)
-      return;
-    }
-    if (accountId == loadedAccountId) return;
-
+  // Fetch initial config
+  store.init(async (_config, update_set) => {
     const $jmap = await ready(jmap)
     const $mailbox_roles = await ready(mailbox_roles, data => data.role_ids)
 
-    console.log("[config] initial config fetch", accountId, loadedAccountId)
-    const raw_config = await load_config($jmap, accountId, mailbox_roles)
+    console.log("[config %s] initial config fetch", accountId)
+    const loaded_config = await load_config($jmap, accountId, mailbox_roles)
+    const new_config = Object.assign(loaded_config, {
+      accountId,
+    })
 
     save.inhibit(() => {
       // Unconditionally set config to what we got from JMAP
       // This will drop any changes made to the config during the initial load
       // (there should not be any)
-      const new_config = new Config(raw_config, {
-        accountId,
-      }, $mailbox_roles)
-      console.log("[config] initial config load")
+      console.log("[config %s] initial config load", accountId)
       update_set(new_config)
     })
 
     store.init(async (config, update_set) => {
-      const {accountId} = config.raw
-      return await subscribe_config($jmap, accountId, config.raw, new_val => {
+      return await subscribe_config($jmap, accountId, config, new_config => {
         save.inhibit(() => {
           // Unconditionally set config to what we got from JMAP
           // This will drop any changes made to the config if there is a change on
           // the server. Most probably changes are saved first.
-          console.log("[config] load config (server change)")
-          update_set(new Config(raw_config, {
+          console.log("[config %s] load config (server change)", accountId)
+          update_set(Object.assign(new_config, {
             accountId,
-          }, $mailbox_roles))
+          }))
         })
       })
     })
@@ -175,16 +133,16 @@ async function load_config(jmap, accountId, mailbox_roles) {
 
     const mailbox_id = Object.keys(resp2.get('Mailbox/set').created)[0]
 
-    const raw_config = {
+    const loaded_config = {
       loaded: true,
       configMailboxId: mailbox_id,
     }
 
-    console.log("[config] start with an empty config %o", raw_config)
+    console.log("[config] start with an empty config %o", loaded_config)
 
-    await save_config(jmap, accountId, mailbox_roles, raw_config, {})
+    await save_config(jmap, accountId, mailbox_roles, loaded_config, {})
 
-    return raw_config
+    return loaded_config
   }
 
   const mailbox_id = role_ids['Drafts'][0]
@@ -211,7 +169,7 @@ async function load_config(jmap, accountId, mailbox_roles) {
   const blobId = email.list[0]?.blobId
   const id = email.list[0]?.id
 
-  const raw_config = {
+  const loaded_config = {
     ...data,
     loaded: !!state,
     accountId,
@@ -222,9 +180,9 @@ async function load_config(jmap, accountId, mailbox_roles) {
     configMailboxId: mailbox_id,
   }
 
-  console.log("[config] loaded %o", raw_config)
+  console.log("[config] loaded %o", loaded_config)
 
-  return raw_config
+  return loaded_config
 }
 
 async function subscribe_config(jmap, accountId, {configState, configMailboxId}, set) {

@@ -27,16 +27,16 @@ function newContextStore(mailbox_roles, config){
     // always return after an update to avoid infinite loops
     if (!jmap) return
     if (!session) {
-      console.log("[ctx] set JMAP session")
       const session = await jmap.request_session()
       if (!session) return // avoid loops if there is an error
+      console.log("[ctx] set JMAP session")
       update(ctx => ({...ctx, session}))
       return // the above update with retrigger this callback
     }
     if (!accountId) {
-      console.log("[ctx] set JMAP accountId")
       const accountId = await jmap.get_first_account_id()
       if (!accountId) return // avoid loops if there is an error
+      console.log("[ctx] set JMAP accountId = %s", accountId)
       update(ctx => ({...ctx, accountId}))
       return
     }
@@ -55,28 +55,32 @@ function newContextStore(mailbox_roles, config){
     }
   })
 
-  // Initialize config
-  ctx.derive(({accountId, config}) => {
-    const $config = get(config)
-    if (accountId != $config.accountId) {
-      console.log("[ctx] initialize config accountId = %o", accountId)
-      config.set(Object.assign($config, { accountId }))
-    }
-  })
-
   // mark as ready
-  ctx.derive([ctx, config, mailbox_roles], (ctx) => {
-    const ready = !! (
-      ctx.jmap &&
-      get(ctx.config).loaded &&
-      get(ctx.mailbox_roles).role_ids )
+  ctx.derive([ctx, null, mailbox_roles], (_, [$ctx, $config, $mailbox_roles], {update_derive}) => {
+    const { accountId } = $ctx
 
-    if (ready != ctx.ready) {
-      console.log("[ctx] ready = %o", ready)
-      return { ...ctx, ready }
+    if (accountId && !$config) {
+      update_derive([ctx, config[accountId], mailbox_roles])
+      return
+    }
+
+    const ready = {
+      accountId: !! accountId,
+      jmap: !! $ctx.jmap,
+      config: !! $config?.loaded,
+      mailbox_role_ids: !! $mailbox_roles.role_ids,
+    }
+
+    const all_ready = Object.values(ready).reduce((a,b) => a&&b, true)
+
+    if (all_ready != $ctx.ready) {
+      if (all_ready) console.log("[ctx] ready")
+      else console.log("[ctx] not ready: %o", ready)
+      return { ...$ctx, ready: all_ready }
+    } else if (!all_ready) {
+      console.log("[ctx] not ready: %o", ready)
     }
   })
-
 
   return ctx
 }

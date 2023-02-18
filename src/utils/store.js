@@ -1,6 +1,16 @@
-import { readable, writable, derived, get } from 'svelte/store';
+import { readable, writable, derived as derived_orig, get } from 'svelte/store';
 
-export { readable, writable, derived, get }
+export { readable, writable, get }
+
+export function derived(stores, callback = null, ...args) {
+  if (callback == null) {
+    callback = (x) => x
+  }
+  if (stores instanceof Array) {
+    stores = Array.from(stores, store => ( store == null ? readable(null) : store ))
+  }
+  return derived_orig(stores, callback, ...args)
+}
 
 export async function ready(store, predicate) {
   return await new Promise((accept, reject) => {
@@ -26,7 +36,7 @@ export function combine(stores) {
   }
 
   if (stores instanceof Array) {
-    return derived(stores, (x) => x)
+    return derived(stores)
   } else {
     const names = []
     const store_arr = []
@@ -167,19 +177,39 @@ export function fancy(def_value, start) {
       cb = parent_store
       parent_store = null
     } else if (parent_store instanceof Array) {
-      parent_store = derived(parent_store, x => x)
+      parent_store = derived(parent_store)
     }
 
-    if (parent_store == null) {
-      return store.subscribe(data => {
-        const res = cb(data, update)
-        if (res !== undefined && ! (res instanceof Promise)) update.set(res)
-      })
-    } else {
-      return parent_store.subscribe(async parent_data => { 
-        const res = cb(get(store), parent_data, update)
-        if (res !== undefined && ! (res instanceof Promise)) update.set(res)
-      })
+    let unsubscribe
+
+    update.derive = null // derive inside a derive is a receipe for disaster
+    // What we can do instead is to replace the derive stores
+    if (parent_store != null) update.update_derive = (new_store) => {
+      if (!new_store) {
+        new_store = parent_store
+      } else if (new_store instanceof Array) {
+        new_store = derived(new_store)
+      }
+      if (unsubscribe) finalize_before_time(unsubscribe)
+      unsubscribe = subscribe_derived(new_store)
+      add_finalizer(unsubscribe)
+    }
+
+    unsubscribe = subscribe_derived(parent_store)
+    return unsubscribe;
+
+    function subscribe_derived(parent_store) {
+      if (parent_store == null) {
+        return store.subscribe(data => {
+          const res = cb(data, update)
+          if (res !== undefined && ! (res instanceof Promise)) update.set(res)
+        })
+      } else {
+        return parent_store.subscribe(async parent_data => { 
+          const res = cb(get(store), parent_data, update)
+          if (res !== undefined && ! (res instanceof Promise)) update.set(res)
+        })
+      }
     }
   }
 
@@ -198,11 +228,21 @@ export function fancy(def_value, start) {
   }
 
   function add_finalizer(promise_unsub) {
-    if(countdown-- <= 0) throw "countdown"
     sync_resolve(promise_unsub, unsub => {
       if (!unsub) return
       if (starting || started) unsubscribes.push(unsub)
       else call_unsubscribe(unsub)
+    })
+  }
+
+  function finalize_before_time(promise_unsub) {
+    sync_resolve(promise_unsub, unsub => {
+      if (!unsub) return
+      if (starting || started) {
+        const index = unsubscribes.indexOf()
+        if (index >= 0) delete unsubscribes[index]
+      }
+      call_unsubscribe(unsub)
     })
   }
 }

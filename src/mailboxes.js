@@ -4,8 +4,9 @@ import { fancy, jmap, ready } from './stores.js'
 export const all_roles = ['All', 'Archive', 'Drafts', 'Flagged', 'Important', 'Inbox', 'Junk', 'Sent', 'Trash']
 
 export const mailboxes = new Proxy({}, {
-  get(target, name, receiver) {
-    return newMailboxes(jmap, name)
+  get(target, accountId) {
+    target[accountId] ||= newMailboxes(jmap, accountId)
+    return target[accountId]
   }
 })
 

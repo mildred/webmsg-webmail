@@ -14,7 +14,7 @@ class OAuthClient {
     if (!this.store) return
 
     const data = get(this.store)
-    console.log("[oauth] get tokens from store", data)
+    // console.log("[oauth] get tokens from store", data)
 
     this.access_token = data.oauth_access_token
     this.token_type = data.oauth_token_type
