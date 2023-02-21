@@ -13,6 +13,10 @@ export class Config {
     })
   }
 
+  async ready() {
+    return await ready(this.store, cfg => cfg.loaded)
+  }
+
   get config() {
     return get(this.store)
   }
@@ -27,7 +31,8 @@ export class Config {
 
   add_address_mailbox_filter(header, address, mailbox) {
     this.store.update(config => {
-      config.filters ||= []
+      if (config.filters instanceof Array) config.filters = {}
+      config.filters ||= {}
       config.filters[header] ||= {}
       config.filters[header][address] ||= {}
       config.filters[header][address].mailboxId = mailbox
@@ -64,7 +69,7 @@ export function newConfigStore(jmap, mailbox_roles, accountId) {
     if (save.inhibited) return
     const $jmap = await ready(jmap)
 
-    console.log("[config %s] save config", accountId)
+    console.log("[config %s] save config", accountId, config)
     const cfgUpdate = await save_config($jmap, accountId, mailbox_roles, config)
     // avoid calling set on the store, no need to notify subscribers
     // this is also to avoid loops. Modify the object in place.
@@ -164,7 +169,7 @@ async function load_config(jmap, accountId, mailbox_roles) {
   ])
 
   const email = resp2.get('Email/get')
-  const data = email.list[0] ? JSON.parse(email.list[0].bodyValues['1'].value) : null
+  const data = email.list[0] ? JSON.parse(Object.values(email.list[0].bodyValues)[0].value) : null
   const state = email.state
   const blobId = email.list[0]?.blobId
   const id = email.list[0]?.id

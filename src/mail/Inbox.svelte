@@ -1,6 +1,6 @@
 <script>
   // vim: ft=html
-  import { readable, ready, get } from '../stores.js';
+  import { readable, writable, ready, get } from '../stores.js';
   import EmailBody from './EmailBody.svelte';
   import EmailIcon from './EmailIcon.svelte';
   import InboxFilterDialog from './InboxFilterDialog.svelte'
@@ -9,6 +9,16 @@
   import SvgIcon from '@jamescoyle/svelte-icon';
   import * as mdi from '@mdi/js';
   import { ctx } from '../context.js'
+  import { filter_all } from './filter.js'
+  import { BarLoader } from 'svelte-loading-spinners';
+  import { config } from '../config.js';
+  import { mailbox_roles } from '../mailboxes.js';
+
+  const mailboxId = new Promise(async (accept) => {
+    const { accountId, jmap, mailbox_roles } = await ready(ctx, ctx => ctx.ready)
+    const { role_ids } = await ready(mailbox_roles, data => data.role_ids)
+    accept(role_ids['Inbox'][0])
+  })
 
   const threads = readable([], async (set) => {
     const { accountId, jmap } = await ready(ctx, ctx => ctx.ready)
@@ -19,6 +29,9 @@
         sort: [
           { property: 'receivedAt', isAscending: false }
         ],
+        filter: {
+          inMailbox: await mailboxId,
+        },
         position: 0,
         limit: 100,
         calculateTotal: true,
@@ -33,7 +46,7 @@
       }, '2']
     ])
 
-    const threads = resp.get('Thread/get').list.reduce((h,v) => ({...h, [v.id]: v}), {})
+    const hreads = resp.get('Thread/get').list.reduce((h,v) => ({...h, [v.id]: v}), {})
     const emails = resp.get('Email/get').list.map(v => ({...v, thread: threads[v.threadId]}))
     set(emails)
 
@@ -53,16 +66,44 @@
     }
   }
 
+  let filter_updates = null
+  let filter_processed = null
+  async function run_filter(e){
+    filter_updates = writable({})
+    const { accountId, jmap } = await ready(ctx, ctx => ctx.ready)
+    const $mailboxId = await mailboxId
+    filter_processed = await filter_all({jmap, accountId, config}, filter_updates, (act) => {
+      act[`mailboxIds/${$mailboxId}`] = false
+    })
+    filter_updates = null
+  }
 </script>
 
 <div class="main">
 <h1>Inbox</h1>
 
+<center>
+  {#if filter_updates}
+    <p>{$filter_updates.state}</p>
+    {#if $filter_updates.progress_total}
+      <p>
+        <span class="ui-progress" style="width: 20em"><span style="width: {100 * $filter_updates.progress_current / $filter_updates.progress_total}%"></span></span>
+        {$filter_updates.progress_current} / {$filter_updates.progress_total}
+      </p>
+    {:else}
+      <p><BarLoader/></p>
+    {/if}
+  {:else if filter_processed != null}
+    <p>{filter_processed} emails filtered</p>
+  {/if}
+  <button disabled={!! filter_updates} on:click={run_filter}>Filter</button>
+</center>
+
 {#each $threads as email}
   <article on:click={e => showThread(e.target, email)}>
     <div class="icon">
       <EmailIcon name={email.from[0].name} email={email.from[0].email} />
-      {#if email.thread.emailIds.length > 1}
+      {#if email.thread && email.thread.emailIds.length > 1}
         <div class="num-email">{email.thread.emailIds.length}</div>
       {/if}
     </div>

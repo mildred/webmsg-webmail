@@ -6,6 +6,7 @@
   import { createEventDispatcher } from 'svelte';
   import { ctx } from '../context.js'
   import { config } from '../config.js'
+  import { headers_translate } from './filter.js';
   import {
     Dialog,
     DialogOverlay,
@@ -32,9 +33,8 @@
             accountId,
             ids: [email.id],
             properties: [
-              'from', 'to', 'cc', 'bcc',
-              'header:Delivered-To:asAddresses:all'
-            ],
+              'from', 'to', 'cc', 'bcc', 'delivered-to'
+            ].map(h => headers_translate[h]),
           }, 'email']
         ])
         console.log(resp)
@@ -43,15 +43,16 @@
 
     function list_all(email){
       return [
-        list(email.from, 'from', "From: "),
-        list(email.to,   'to',   "To: "),
-        list(email.cc,   'cc',   "Cc: "),
-        list(email.bcc,  'bcc',  "Bcc: "),
-        list(email['header:Delivered-To:asAddresses:all'], 'delivered-to', "Delivered-To: "),
+        list(email, 'from', "From: "),
+        list(email, 'to',   "To: "),
+        list(email, 'cc',   "Cc: "),
+        list(email, 'bcc',  "Bcc: "),
+        list(email, 'delivered-to', "Delivered-To: "),
       ].filter(x => x).flat()
     }
 
-    function list(list, header, text) {
+    function list(email, header, text) {
+      const list = email[headers_translate[header]]
       return list?.flat()?.map(a => ({
         text: (a.name ? `${text}${a.name} <${a.email}>` : text + a.email),
         value: `${header}:${a.email}`

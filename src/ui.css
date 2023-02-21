@@ -41,3 +41,18 @@
   justify-content: flex-end;
   gap: 1rem;
 }
+
+.ui-progress {
+  background-color: #ccc;
+  display: inline-block;
+  height: 0.5rem;
+  position: relative;
+}
+.ui-progress > * {
+  background-color: #333;
+  display: block;
+  height: 100%;
+  position: absolute;
+  left: 0;
+  top: 0;
+}
