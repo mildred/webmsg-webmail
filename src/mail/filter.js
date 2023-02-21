@@ -1,3 +1,10 @@
+async function render() {
+  return
+  //return await new Promise(accept => {
+  //  setTimeout(0, accept)
+  //})
+}
+
 // updates is a writable store that is updated with the filtering updates
 export async function filter_all({jmap, accountId, config}, updates, filter_cb) {
   const batch_size = 50
@@ -52,6 +59,7 @@ export async function filter_all({jmap, accountId, config}, updates, filter_cb) 
       progress_current: position,
       progress_total: total_query + total_actions + total_estimated_actions
     }))
+    await render()
     position = resp_query.position || (position + resp_query.ids.length)
     query_position = {
       anchor: resp_query.ids[resp_query.ids.length - 1],
@@ -70,6 +78,7 @@ export async function filter_all({jmap, accountId, config}, updates, filter_cb) 
         progress_current: $updates.progress_current + 1,
         progress_total: $updates.progress_total - (act ? 0 : 1)
       }))
+      await render()
     }
     if (position + resp_query.limit >= total_query) {
       break
@@ -85,6 +94,7 @@ export async function filter_all({jmap, accountId, config}, updates, filter_cb) 
       progress_current: total_query + processed,
       progress_total: total_query + total_actions
     }))
+    await render()
     const resp = await jmap.request([
       ['Email/set', {
         accountId,
@@ -116,7 +126,7 @@ export const headers_translate = {
 export function filter_email(email, config, action_cb) {
   for(const [header, filter_header] of Object.entries(config.config.filters)) {
     for(const [addr, filter_addr] of Object.entries(filter_header)) {
-      for(const email_addr of email[headers_translate[header]]) {
+      for(const email_addr of email[headers_translate[header]] || []) {
         if (email_addr.email == addr) {
           action_cb(filter_addr)
         }
