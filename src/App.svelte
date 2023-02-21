@@ -4,6 +4,7 @@
   import { JMAP } from './jmap.js'
   import { Route } from 'tinro';
   import Inbox from './mail/Inbox.svelte'
+  import NavHeader from './mail/NavHeader.svelte';
   import { newConfigStore } from './config.js';
   import { mailbox_roles } from './mailboxes.js'
   import { ctx } from './context.js'
@@ -18,6 +19,8 @@
     <p>Connecting to the server...</p>
   </main>
 {:else}
+
+  <NavHeader />
 
   <Route path="/" redirect="/mail/inbox" />
   <Route path="/mail/inbox">
