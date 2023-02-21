@@ -8,6 +8,7 @@
   import Time from "svelte-time";
   import SvgIcon from '@jamescoyle/svelte-icon';
   import * as mdi from '@mdi/js';
+  import { inview } from 'svelte-inview';
   import { ctx } from '../context.js'
   import { filter_all } from './filter.js'
   import { BarLoader } from 'svelte-loading-spinners';
@@ -20,40 +21,94 @@
     accept(role_ids['Inbox'][0])
   })
 
-  const threads = readable([], async (set) => {
-    const { accountId, jmap } = await ready(ctx, ctx => ctx.ready)
-    const resp = await jmap.request([
-      ['Email/query', {
-        accountId,
-        collapseThreads: true,
-        sort: [
-          { property: 'receivedAt', isAscending: false }
-        ],
-        filter: {
-          inMailbox: await mailboxId,
-        },
-        position: 0,
-        limit: 100,
-        calculateTotal: true,
-      }, '0'],
-      ['Email/get', {
-        accountId,
-        '#ids': { resultOf: '0', name: 'Email/query', path: '/ids' }
-      }, '1'],
-      ['Thread/get', {
-        accountId,
-        '#ids': { resultOf: '1', name: 'Email/get', path: '/list/*/threadId' }
-      }, '2']
-    ])
-
-    const hreads = resp.get('Thread/get').list.reduce((h,v) => ({...h, [v.id]: v}), {})
-    const emails = resp.get('Email/get').list.map(v => ({...v, thread: threads[v.threadId]}))
-    set(emails)
-
-    return stop
-    function stop() {
+  function threads_store(request_position){
+    if (!request_position) {
+      request_position = {
+        position: 0, limit: 100
+      }
     }
-  })
+
+    let store_value = {
+      total: null,
+      emails: [],
+      next: null,
+      next_loading: false,
+    }
+
+    return readable(store_value, async (set) => {
+      const { accountId, jmap } = await ready(ctx, ctx => ctx.ready)
+
+      async function get_threads(request_position){
+        const resp = await jmap.request([
+          ['Email/query', {
+            accountId,
+            collapseThreads: true,
+            sort: [
+              { property: 'receivedAt', isAscending: false }
+            ],
+            filter: {
+              inMailbox: await mailboxId,
+            },
+            ...request_position,
+            calculateTotal: true,
+          }, '0'],
+          ['Email/get', {
+            accountId,
+            '#ids': { resultOf: '0', name: 'Email/query', path: '/ids' }
+          }, '1'],
+          ['Thread/get', {
+            accountId,
+            '#ids': { resultOf: '1', name: 'Email/get', path: '/list/*/threadId' }
+          }, '2']
+        ])
+
+        const threads = resp.get('Thread/get').list.reduce((h,v) => ({...h, [v.id]: v}), {})
+        const emails = resp.get('Email/get').list.map(v => ({...v, thread: threads[v.threadId]}))
+        const { total, position, limit } = resp.get('Email/query')
+
+        console.log("%d emails already loaded, %d emails (limit %d) just loaded at position %d for a total of %d",
+          store_value.emails.length, emails.length, limit, position, total)
+
+        store_value = {
+          total,
+          emails: [
+            ...store_value.emails,
+            ...emails
+          ],
+          next_loading: false,
+          more: total - (position || store_value.emails.length) - emails.length,
+          next: emails.length < limit ? null : () => {
+            store_value.next = null
+            store_value.next_loading = true
+            set(store_value)
+            state = get_threads({
+              anchor: emails[emails.length - 1].id,
+              anchorOffset: 1,
+            })
+          },
+        }
+        set(store_value)
+
+        return resp.get('Email/get').state
+      }
+
+      let state = await get_threads(request_position)
+
+      const unsubscribe_state_change = jmap.get_state_changes(async ({changed}) => {
+        const newState = changed[accountId].Email
+        if (state != newState) {
+          state = await get_threads(request_position)
+        }
+      })
+
+      return stop
+      function stop() {
+        unsubscribe_state_change()
+      }
+    })
+  }
+
+  const threads = threads_store()
 
   let expandedEmailId = null
   let filterEmailId = null
@@ -72,7 +127,7 @@
     filter_updates = writable({})
     const { accountId, jmap } = await ready(ctx, ctx => ctx.ready)
     const $mailboxId = await mailboxId
-    filter_processed = await filter_all({jmap, accountId, config}, filter_updates, (act) => {
+    filter_processed = await filter_all({jmap, accountId, config, mailboxId: $mailboxId}, filter_updates, (act) => {
       act[`mailboxIds/${$mailboxId}`] = false
     })
     filter_updates = null
@@ -96,10 +151,15 @@
   {:else if filter_processed != null}
     <p>{filter_processed} emails filtered</p>
   {/if}
-  <button disabled={!! filter_updates} on:click={run_filter}>Filter</button>
+  <button disabled={!! filter_updates} on:click={run_filter}>run filters</button>
 </center>
 
-{#each $threads as email}
+{#if $threads.total == null}
+<p>loading emails...</p>
+{:else}
+<p>{$threads.total} emails in Inbox</p>
+{/if}
+{#each $threads.emails as email}
   <article on:click={e => showThread(e.target, email)}>
     <div class="icon">
       <EmailIcon name={email.from[0].name} email={email.from[0].email} />
@@ -123,19 +183,38 @@
       </div>
     </a>
     <div class="filters" on:click={e => {e.stopPropagation(); filterEmailId = email.id}}>
+      <a href="#"><SvgIcon type='mdi' path={mdi.mdiNoteMultiple} /> Filter</a>
+      <!--
       <a href="#"><SvgIcon type='mdi' path={mdi.mdiHome} /> Home</a>
       <a href="#"><SvgIcon type='mdi' path={mdi.mdiGhost} /> Hidden</a>
       <a href="#"><SvgIcon type='mdi' path={mdi.mdiEmailNewsletter} /> News</a>
       <a href="#"><SvgIcon type='mdi' path={mdi.mdiNoteMultiple} /> Background</a>
+      -->
     </div>
   </article>
   {#if filterEmailId == email.id}
-    <InboxFilterDialog on:close={e => {filterEmailId = null}} email={email} />
+    <InboxFilterDialog
+      on:close={e => {filterEmailId = null}}
+      on:accept={run_filter}
+      email={email} />
   {/if}
   {#if expandedEmailId == email.id}
     <EmailBody email={email} show_header={false} />
   {/if}
 {/each}
+<p class="loading-next"
+   use:inview={{}}
+   on:enter={(e) => {if ($threads.next) $threads.next()}}>
+  {$threads.emails.length} emails shown,
+  {#if $threads.more}
+    {$threads.more} more emails
+  {:else}
+    no more emails
+  {/if}
+  {#if $threads.next_loading}
+    <br/><BarLoader/>
+  {/if}
+</p>
 
 </div>
 
@@ -234,6 +313,7 @@ article:not(:hover) > .filters {
   flex-flow: row wrap;
   width: 16rem;
   flex: 0 0 16rem;
+  width: 8rem;
 }
 
 .filters > a {
@@ -251,6 +331,11 @@ article:not(:hover) > .filters {
 .filters > a > svg {
   width: 1em;
   height: 1em;
+}
+
+p.loading-next {
+  text-align: center;
+  font-style: italic;
 }
 
 </style>

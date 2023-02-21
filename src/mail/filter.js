@@ -6,7 +6,7 @@ async function render() {
 }
 
 // updates is a writable store that is updated with the filtering updates
-export async function filter_all({jmap, accountId, config}, updates, filter_cb) {
+export async function filter_all({jmap, accountId, config, mailboxId}, updates, filter_cb) {
   const batch_size = 50
   updates.update($updates => ({
     ...$updates,
@@ -31,6 +31,9 @@ export async function filter_all({jmap, accountId, config}, updates, filter_cb) 
         sort: [
           { property: 'receivedAt', isAscending: false }
         ],
+        filter: {
+          inMailbox: mailboxId,
+        },
         ...query_position,
         limit: batch_size,
         calculateTotal: true,

@@ -377,11 +377,12 @@ export class JMAP {
     const clear = () => {this.clear_get_state_changes(index)}
     clear.index = index
     clear.callback = callback
+    return clear;
   }
 
   clear_get_state_changes(index_or_callback) {
     if (typeof(index_or_callback) == 'number') {
-      delete this.state_change_callbacks[index]
+      delete this.state_change_callbacks[index_or_callback]
     } else if (this.state_change_callbacks[index_or_callback.index] === index_or_callback.callback) {
       delete this.state_change_callbacks[index_or_callback.index]
     } else {

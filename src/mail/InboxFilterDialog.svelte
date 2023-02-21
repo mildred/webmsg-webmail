@@ -85,11 +85,11 @@
 
   async function accept(){
     const { accountId } = await ready(ctx, ctx => ctx.ready)
-    dispatch('accept')
     const [header, email] = filter_criteria.split(':')
     console.log('[InboxFilterDialog] Add filter', header, email, filter_mailbox)
     config[accountId].add_address_mailbox_filter(header, email, filter_mailbox)
     console.log('[InboxFilterDialog] new config', config[accountId])
+    dispatch('accept')
     return close()
   }
 
