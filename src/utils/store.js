@@ -12,6 +12,13 @@ export function derived(stores, callback = null, ...args) {
   return derived_orig(stores, callback, ...args)
 }
 
+export function async_derived(initial_value, store) {
+  return fancy(initial_value).init(async (_, {set, add_finalizer}) => {
+    const actual_store = (typeof store == 'function') ? await store() : await store
+    add_finalizer(actual_store.subscribe(value => set(value)))
+  })
+}
+
 export async function ready(store, predicate) {
   return await new Promise((accept, reject) => {
     let keep_subscription = false

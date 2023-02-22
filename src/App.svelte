@@ -2,8 +2,9 @@
   // vim: ft=html
   import { session, get, jmap } from './stores.js'
   import { JMAP } from './jmap.js'
-  import { Route } from 'tinro';
+  import { Route, router } from 'tinro';
   import Inbox from './mail/Inbox.svelte'
+  import Mailbox from './mail/Mailbox.svelte'
   import NavHeader from './mail/NavHeader.svelte';
   import { newConfigStore } from './config.js';
   import { mailbox_roles } from './mailboxes.js'
@@ -11,6 +12,17 @@
   import { BarLoader } from 'svelte-loading-spinners';
 
   jmap.set(new JMAP('https://test2.mx.webmsg.me', session))
+
+  router.mode.hash()
+  //addEventListener('hashchange', (e) => {
+  //  console.log("[hashchange] %o", e, window.location.hash)
+  //  router.goto(window.location.hash.substr(1))
+  //});
+
+  router.subscribe(route => {
+    console.log("[tinro router]", route)
+  })
+
 </script>
 
 {#if ! $ctx.ready}
@@ -22,9 +34,16 @@
 
   <NavHeader />
 
-  <Route path="/" redirect="/mail/inbox" />
-  <Route path="/mail/inbox">
-    <Inbox />
+  <Route path="/*" firstmatch>
+    <Route path="/mail/mailbox/:mailboxId/*" let:meta>
+      mailbox {meta.params.mailboxId}
+      <Mailbox mailboxId={meta.params.mailboxId} />
+    </Route>
+    <Route path="/mail/inbox/*">
+      inbox
+      <Inbox />
+    </Route>
+    <Route path="/" redirect="/mail/inbox/" />
   </Route>
 
 {/if}

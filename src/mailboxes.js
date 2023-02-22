@@ -10,7 +10,44 @@ export const mailboxes = new Proxy({}, {
   }
 })
 
+export const all_mailboxes_by_id = new Proxy({}, {
+  get(target, accountId) {
+    target[accountId] ||= new Proxy({}, {
+      get(target, mailboxId) {
+        target[mailboxId] ||= newMailboxById(jmap, accountId, mailboxId)
+        return target[mailboxId]
+      }
+    })
+    return target[accountId]
+  }
+})
+
 export const mailbox_roles = newMailboxRoles()
+
+function newMailboxById(jmap, accountId, mailboxId){
+  return fancy({}).init(async (mailboxes, { set, add_finalizer }) => {
+    const $jmap = await ready(jmap)
+
+    await refresh_mailbox()
+
+    add_finalizer($jmap.get_state_changes(async (data) => {
+      const changed = data.changed[accountId] || {}
+      const mailbox_changed = changed['Mailbox']
+      if (mailbox_changed) await refresh_mailbox()
+    }))
+
+    async function refresh_mailbox(){
+      const resp = await $jmap.request([
+        ['Mailbox/get', {
+          accountId,
+          ids: [mailboxId]
+        }, 'g']
+      ])
+
+      set(resp.get('g').list[0])
+    }
+  })
+}
 
 function newMailboxes(jmap, accountId, parentId = null){
   return fancy({})

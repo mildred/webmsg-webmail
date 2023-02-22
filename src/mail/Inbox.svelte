@@ -1,6 +1,6 @@
 <script>
   // vim: ft=html
-  import { readable, writable, ready, get } from '../stores.js';
+  import { readable, writable, ready, get, async_derived, fancy } from '../stores.js';
   import EmailBody from './EmailBody.svelte';
   import EmailIcon from './EmailIcon.svelte';
   import InboxFilterDialog from './InboxFilterDialog.svelte'
@@ -13,13 +13,23 @@
   import { filter_all } from './filter.js'
   import { BarLoader } from 'svelte-loading-spinners';
   import { config } from '../config.js';
-  import { mailbox_roles } from '../mailboxes.js';
+  import { mailbox_roles, all_mailboxes_by_id } from '../mailboxes.js';
 
   const mailboxId = new Promise(async (accept) => {
     const { accountId, jmap, mailbox_roles } = await ready(ctx, ctx => ctx.ready)
     const { role_ids } = await ready(mailbox_roles, data => data.role_ids)
     accept(role_ids['Inbox'][0])
   })
+
+  let mailbox
+  $: mailbox = mailbox_store(mailboxId)
+
+  function mailbox_store(mailboxId) {
+    return async_derived({}, async () => {
+      const { accountId, jmap } = await ready(ctx, ctx => ctx.ready)
+      return all_mailboxes_by_id[accountId][await mailboxId]
+    })
+  }
 
   function threads_store(request_position){
     if (!request_position) {
@@ -35,7 +45,7 @@
       next_loading: false,
     }
 
-    return readable(store_value, async (set) => {
+    return fancy(store_value).init(async (_, set) => {
       const { accountId, jmap } = await ready(ctx, ctx => ctx.ready)
 
       async function get_threads(request_position){
@@ -77,7 +87,7 @@
           ],
           next_loading: false,
           more: total - (position || store_value.emails.length) - emails.length,
-          next: emails.length < limit ? null : () => {
+          next: (emails.length == 0 || emails.length < limit) ? null : () => {
             store_value.next = null
             store_value.next_loading = true
             set(store_value)
@@ -94,7 +104,7 @@
 
       let state = await get_threads(request_position)
 
-      const unsubscribe_state_change = jmap.get_state_changes(async ({changed}) => {
+      const unsubscribe_state_change = await jmap.get_state_changes(async ({changed}) => {
         const newState = changed[accountId].Email
         if (state != newState) {
           state = await get_threads(request_position)
@@ -135,7 +145,10 @@
 </script>
 
 <div class="main">
-<h1>Inbox</h1>
+{#if !$mailbox.id}
+<center><BarLoader/></center>
+{:else}
+<h1>{$mailbox.name}</h1>
 
 <center>
   {#if filter_updates}
@@ -157,7 +170,7 @@
 {#if $threads.total == null}
 <p>loading emails...</p>
 {:else}
-<p>{$threads.total} emails in Inbox</p>
+<p>{$threads.total} emails in {$mailbox.name}</p>
 {/if}
 {#each $threads.emails as email}
   <article on:click={e => showThread(e.target, email)}>
@@ -216,6 +229,7 @@
   {/if}
 </p>
 
+{/if}
 </div>
 
 <style>

@@ -19,7 +19,7 @@ TODO
   individual mail or to a thread (any mail in the thread having the label causes
   the thread to have the label).
 - [ ] default config
-    - default mailboxes : important, hidden, shop, robot, news
+    - default mailboxes : important, hidden, background (shop, robot), news
     - default workflow labels: starred (standard IMAP), needs reply
 - [ ] inbox filters: filters based on a the domain part of the address only
   (every local part will match)

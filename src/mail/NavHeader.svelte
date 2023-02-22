@@ -19,9 +19,9 @@
 <nav>
   {#each $mboxes as mbox}
     {#if mbox.role == "inbox"}
-      <a href="#/mail/inbox">{mbox.name}</a>
+      <a href="#/mail/inbox/">{mbox.name}</a>
     {:else}
-      <a href="#/mail/mailbox/{mbox.id}">{mbox.name}</a>
+      <a href="#/mail/mailbox/{mbox.id}/">{mbox.name}</a>
     {/if}
   {/each}
 </nav>
