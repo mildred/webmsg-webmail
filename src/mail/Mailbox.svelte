@@ -4,8 +4,13 @@
   import { ctx } from '../context.js'
   import { all_mailboxes_by_id } from '../mailboxes.js';
   import { BarLoader } from 'svelte-loading-spinners';
+  import MailboxSettingsDialog from './MailboxSettingsDialog.svelte'
+  import SvgIcon from '@jamescoyle/svelte-icon';
+  import * as mdi from '@mdi/js';
 
   export let mailboxId
+
+  let settings_opened = false
 
   let mailbox
   $: mailbox = mailbox_store(mailboxId)
@@ -20,11 +25,32 @@
 </script>
 
 
+{#if settings_opened}
+  <MailboxSettingsDialog mailbox={$mailbox} on:close={e => {settings_opened = false}}/>
+{/if}
+
 <div class="main">
   {#if ! $mailbox.id}
   <center><BarLoader/></center>
   {:else}
+  <div class="settings">
+    <button on:click={e => {settings_opened = true}}><SvgIcon type='mdi' path={mdi.mdiCogOutline} /></button>
+  </div>
   <h1>{$mailbox.name}</h1>
+
+
+  <div class="toolbar">
+    <div class="buttons">
+      <span class="button"><SvgIcon type='mdi' path={mdi.mdiViewList} /></span>
+      <span class="button"><SvgIcon type='mdi' path={mdi.mdiViewAgenda} /></span>
+    </div>
+
+    <div class="buttons">
+      <span class="button"><SvgIcon type='mdi' path={mdi.mdiFormatListChecks} /></span>
+      <span class="button"><SvgIcon type='mdi' path={mdi.mdiFormatListText} /></span>
+    </div>
+  </div>
+
   {/if}
 </div>
 
@@ -37,6 +63,16 @@
   border: 1px solid #888;
   border-radius: 1rem;
   padding: 2rem;
+}
+
+.main > .settings {
+  float: right;
+}
+
+.main > .settings > button {
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
 }
 
 .main h1 {

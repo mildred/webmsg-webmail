@@ -20,10 +20,16 @@
   {#each $mboxes as mbox}
     {#if mbox.role == "inbox"}
       <a href="#/mail/inbox/">{mbox.name}</a>
+    {:else if mbox.role == "trash"}
+    {:else if mbox.role == "junk"}
+    {:else if mbox.role == "sent"}
+    {:else if mbox.role == "drafts"}
     {:else}
       <a href="#/mail/mailbox/{mbox.id}/">{mbox.name}</a>
     {/if}
   {/each}
+  <!-- TODO: show utility mailboxes in a menu hidden away -->
+  <!-- TODO: show sub-mailboxes -->
 </nav>
 
 <style>

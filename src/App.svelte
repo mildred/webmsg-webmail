@@ -36,11 +36,9 @@
 
   <Route path="/*" firstmatch>
     <Route path="/mail/mailbox/:mailboxId/*" let:meta>
-      mailbox {meta.params.mailboxId}
       <Mailbox mailboxId={meta.params.mailboxId} />
     </Route>
     <Route path="/mail/inbox/*">
-      inbox
       <Inbox />
     </Route>
     <Route path="/" redirect="/mail/inbox/" />
