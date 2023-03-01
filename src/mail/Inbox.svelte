@@ -1,6 +1,6 @@
 <script>
   // vim: ft=html
-  import { readable, writable, ready, get, async_derived, fancy } from '../stores.js';
+  import { readable, writable, ready, get, async_derived, fancy, dig_store } from '../stores.js';
   import EmailBody from './EmailBody.svelte';
   import EmailIcon from './EmailIcon.svelte';
   import InboxFilterDialog from './InboxFilterDialog.svelte'
@@ -9,11 +9,12 @@
   import SvgIcon from '@jamescoyle/svelte-icon';
   import * as mdi from '@mdi/js';
   import { inview } from 'svelte-inview';
-  import { ctx } from '../context.js'
+  import { ctx, accountId } from '../context.js'
   import { filter_all } from './filter.js'
   import { BarLoader } from 'svelte-loading-spinners';
   import { config } from '../config.js';
   import { mailbox_roles, all_mailboxes_by_id } from '../mailboxes.js';
+  import { threads_store } from './threads.js'
 
   const mailboxId = new Promise(async (accept) => {
     const { accountId, jmap, mailbox_roles } = await ready(ctx, ctx => ctx.ready)
@@ -21,104 +22,9 @@
     accept(role_ids['Inbox'][0])
   })
 
-  let mailbox
-  $: mailbox = mailbox_store(mailboxId)
-
-  function mailbox_store(mailboxId) {
-    return async_derived({}, async () => {
-      const { accountId, jmap } = await ready(ctx, ctx => ctx.ready)
-      return all_mailboxes_by_id[accountId][await mailboxId]
-    })
-  }
-
-  function threads_store(request_position){
-    if (!request_position) {
-      request_position = {
-        position: 0, limit: 100
-      }
-    }
-
-    let store_value = {
-      total: null,
-      emails: [],
-      next: null,
-      next_loading: false,
-    }
-
-    return fancy(store_value).init(async (_, set) => {
-      const { accountId, jmap } = await ready(ctx, ctx => ctx.ready)
-
-      async function get_threads(request_position){
-        const resp = await jmap.request([
-          ['Email/query', {
-            accountId,
-            collapseThreads: true,
-            sort: [
-              { property: 'receivedAt', isAscending: false }
-            ],
-            filter: {
-              inMailbox: await mailboxId,
-            },
-            ...request_position,
-            calculateTotal: true,
-          }, '0'],
-          ['Email/get', {
-            accountId,
-            '#ids': { resultOf: '0', name: 'Email/query', path: '/ids' }
-          }, '1'],
-          ['Thread/get', {
-            accountId,
-            '#ids': { resultOf: '1', name: 'Email/get', path: '/list/*/threadId' }
-          }, '2']
-        ])
-
-        const threads = resp.get('Thread/get').list.reduce((h,v) => ({...h, [v.id]: v}), {})
-        const emails = resp.get('Email/get').list.map(v => ({...v, thread: threads[v.threadId]}))
-        const { total, position, limit } = resp.get('Email/query')
-
-        console.log("%d emails already loaded, %d emails (limit %d) just loaded at position %d for a total of %d",
-          store_value.emails.length, emails.length, limit, position, total)
-
-        store_value = {
-          total,
-          emails: [
-            ...store_value.emails,
-            ...emails
-          ],
-          next_loading: false,
-          more: total - (position || store_value.emails.length) - emails.length,
-          next: (emails.length == 0 || emails.length < limit) ? null : () => {
-            store_value.next = null
-            store_value.next_loading = true
-            set(store_value)
-            state = get_threads({
-              anchor: emails[emails.length - 1].id,
-              anchorOffset: 1,
-            })
-          },
-        }
-        set(store_value)
-
-        return resp.get('Email/get').state
-      }
-
-      let state = await get_threads(request_position)
-
-      const unsubscribe_state_change = await jmap.get_state_changes(async ({changed}) => {
-        const newState = changed[accountId].Email
-        if (state != newState) {
-          state = await get_threads(request_position)
-        }
-      })
-
-      return stop
-      function stop() {
-        unsubscribe_state_change()
-      }
-    })
-  }
-
-  const threads = threads_store()
+  let mailbox, threads
+  $: mailbox = dig_store({}, all_mailboxes_by_id, ready(accountId), mailboxId)
+  $: threads = threads_store({accountId, mailboxId})
 
   let expandedEmailId = null
   let filterEmailId = null

@@ -1,13 +1,14 @@
 <script>
   // vim: ft=html
 
-  import { ready } from '../utils/store.js';
-  import { mounted } from '../utils/mount.js';
+  import { ready, writable } from '../utils/store.js';
   import { purify } from '../utils/purify.js';
   import { onMount } from 'svelte';
   import EmailIcon from './EmailIcon.svelte';
-  import { futureVisibility } from '../utils/visibility.js';
   import { ctx } from '../context.js'
+  import Time from "svelte-time";
+  import { inview } from 'svelte-inview';
+  import { BarLoader } from 'svelte-loading-spinners';
 
   export let email;
   export let show_header = true;
@@ -15,11 +16,14 @@
 
   const ALLOWED_TYPES = ['text/html', 'text/plain']
 
-  let articleElement
+  let showing = writable(false)
+  let body = getBody(email, showing);
 
-  let body = getBody(email);
+  function show() {
+    showing.update(_ => true)
+  }
 
-  async function getBody(email){
+  async function getBody(email, showing){
     let bodyPart = email.htmlBody.concat(email.textBody).filter(part => ALLOWED_TYPES.includes(part.type))[0]
     let bodyType = bodyPart && bodyPart.charset ? `${bodyPart.type}; charset=${bodyPart.charset}` : (bodyPart || {}).type
 
@@ -28,19 +32,15 @@
       return null;
     }
 
-    await mounted()
-    const elem = await futureVisibility(articleElement)
-
+    await ready(showing)
     const { accountId, jmap } = await ready(ctx, ctx => ctx.ready)
 
     return jmap.blob_data(accountId, bodyPart.blobId, bodyPart.name, bodyType, purify)
   }
 
 
-  let iframe;
-
   // Attribution https://stackoverflow.com/a/64110252
-  function fit() {
+  function fit(iframe) {
     if(!iframe) return;
     var iframes = [iframe] //document.querySelectorAll("iframe.gh-fit")
 
@@ -64,47 +64,42 @@
         }
     }
 
-    requestAnimationFrame(fit)
+    requestAnimationFrame(() => fit(iframe))
   }
 
-  onMount(async () => {
-    let cb = requestAnimationFrame.bind(this, fit)
-    //let i = setInterval(cb, 1000)
+  async function load_body(iframe) {
+    let fit_next_frame = requestAnimationFrame.bind(this, () => fit(iframe))
 
     let doc = await body
 
-    // console.log("[EmailBody] got body", doc)
-
-    // const charset = doc.match(/charset=['"]([^"']*)/)[1]
     let blob = new Blob([doc], {type : 'text/html; charset=url-8'});
     iframe.src = window.URL.createObjectURL(blob);
-    //iframe.srcdoc = doc
-    cb();
-    //addEventListener('load', cb)
+    fit_next_frame();
 
-    return () => removeEventListener('load', cb)
-    //return () => clearInterval(i)
-  })
+    return () => removeEventListener('load', fit_next_frame)
+  }
 
 </script>
 
-<article bind:this={articleElement}>
+<article class:unread={!email.keywords["$seen"]}>
   {#if show_header}
   <div class="row">
     <EmailIcon name={email.from[0].name} email={email.from[0].email} />
-    <h1>
-      {#if !email.keywords["$seen"]}
-        [unread]
-      {/if}
+    <h1 class:unread={!email.keywords["$seen"]}>
       {email.subject}
     </h1>
   </div>
   {/if}
-  <p>From: <em><a href={`mailto:${email.from[0]?.email}`}>{email.from[0]?.name || email.from[0]?.email}</a> ({email.sentAt})</em>
+  <p>From:
+    <em>
+      <a href={`mailto:${email.from[0]?.email}`}>{email.from[0]?.name || email.from[0]?.email}</a>
+      (<Time timestamp={email.sentAt} format="ddd MMM D H:mm" />)
+    </em>
     {#if email.to?.length}
     <br />To: <em>
       {#each (email.to || []) as to}
         <a href={`mailto:${to.email}`}>{to.name || to.email}</a>
+        {@html " " }
       {/each}
     </em>
     {/if}
@@ -112,6 +107,7 @@
     <br/>Cc: <em>
       {#each (email.cc || []) as cc}
         <a href={`mailto:${cc.email}`}>{cc.name || cc.email}</a>
+        {@html " " }
       {/each}
     </em>
     {/if}
@@ -120,14 +116,19 @@
     <p>Keywords: <em>{Object.keys(email.keywords).join(", ")}</em></p>
   {/if}
   {#await body}
-    <p>{email.preview}</p>
-  {:then blob}
+    <p use:inview={{}} on:enter={show}>
+      {email.preview}
+      <center><BarLoader/></center>
+    </p>
+  {:then body}
     <!-- allow same origin in order to access frame content. Javascript shouldn't
     load anyway, and external resources are blocked by default. Moreover, we are
     not specifically a trusted origin, but that depends on the deployment.
     Anyway, the origin is not a good way to separate contexts. -->
     <!-- it's preferable to allow same-origin but not allow scripts -->
-    <iframe title="" sandbox="allow-same-origin" bind:this={iframe}>
+    <iframe title=""
+            sandbox="allow-same-origin"
+            use:load_body={{}}>
       <!--iframe sandbox src={URL.createObjectURL(blob)} bind:this={iframe}-->
     </iframe>
   {/await}
@@ -141,8 +142,18 @@
 
   .row {
     display: flex;
-    flex-flow: row wrap;
-    align-items: baseline;
+    flex-flow: row nowrap;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .row > h1 {
+    font-weight: normal;
+    font-size: 1.2rem;
+  }
+
+  article.unread h1 {
+    font-weight: bold;
   }
 </style>
 

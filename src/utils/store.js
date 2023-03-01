@@ -273,3 +273,12 @@ export class Inhibitor {
   }
 }
 
+export function dig_store(defaultVal, stores, ...args) {
+  return async_derived(defaultVal, async () => {
+    let res = stores
+    for(const arg of args) {
+      res = res[await arg]
+    }
+    return res
+  })
+}

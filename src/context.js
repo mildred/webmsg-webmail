@@ -5,6 +5,10 @@ import { config } from './config.js'
 
 export const ctx = newContextStore(mailbox_roles, config)
 
+export const accountId = derived(ctx, ctx => ctx.accountId)
+
+export { jmap }
+
 function newContextStore(mailbox_roles, config){
   const ctx = fancy({
     mailbox_roles,

@@ -5,6 +5,7 @@
   import { Route, router } from 'tinro';
   import Inbox from './mail/Inbox.svelte'
   import Mailbox from './mail/Mailbox.svelte'
+  import Thread from './mail/Thread.svelte'
   import NavHeader from './mail/NavHeader.svelte';
   import { newConfigStore } from './config.js';
   import { mailbox_roles } from './mailboxes.js'
@@ -35,8 +36,14 @@
   <NavHeader />
 
   <Route path="/*" firstmatch>
+    <Route path="/mail/mailbox/:mailboxId/thread/:threadId/*" let:meta>
+      <Thread mailboxId={meta.params.mailboxId} threadId={meta.params.threadId} />
+    </Route>
     <Route path="/mail/mailbox/:mailboxId/*" let:meta>
       <Mailbox mailboxId={meta.params.mailboxId} />
+    </Route>
+    <Route path="/mail/thread/:threadId/*" let:meta>
+      <Thread threadId={meta.params.threadId} />
     </Route>
     <Route path="/mail/inbox/*">
       <Inbox />

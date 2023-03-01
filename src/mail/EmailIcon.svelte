@@ -1,12 +1,15 @@
 <script>
   // vim: ft=html
 
+  import { inview } from 'svelte-inview';
   import { md5 } from '../md5.js';
 
   export let href = 'javascript:void(0)';
   export let name = '';
   export let email = '';
   export let icon = '404'
+
+  let in_view = false
 
   $: email_hash = md5(email.toLowerCase())
   $: libravatar_url =
@@ -50,9 +53,34 @@
     this.style.display = 'none';
   }
 
+  function enter() {
+    in_view = true
+  }
+
+  function load_img(img, url) {
+    img.onerror = onerror
+  }
+
 </script>
 
+<a href={href}>
+  <div class="text-avatar" title={`${name} <${email}>`}
+       style="--hue: {hue}; --hue2: {hue2}"
+       use:inview={{}}
+       on:enter={e => enter()} >
+    <div class="initials"><span>{initials}</span></div>
+    <img src={libravatar_url}
+         alt=''
+         class:in_view={in_view}
+         use:load_img />
+  </div>
+</a>
+
 <style>
+.hidden, img:not(.in_view) {
+  display: none;
+}
+
 a {
   text-decoration: none;
 }
@@ -98,12 +126,3 @@ img {
   background-color: white;
 }
 </style>
-
-<a href={href}>
-  <div class="text-avatar" title={`${name} <${email}>`}
-       style="--hue: {hue}; --hue2: {hue2}">
-    <div class="initials"><span>{initials}</span></div>
-    <img src={libravatar_url} alt='' onerror="this.style.display = 'none'" />
-  </div>
-</a>
-

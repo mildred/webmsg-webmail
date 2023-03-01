@@ -31,10 +31,10 @@ TODO
 - [ ] configure which mailbox should be the default when opening up the webmail
 - [ ] Add view options for mailboxes
     - [ ] Add Blog view for a mailbox, and add a toolbar to select the current view
-    - [ ] Add thread view to mailbox (similar to inbox but click takes you to the
+    - [x] Add thread view to mailbox (similar to inbox but click takes you to the
           thread and there is no filter buttons)
 - [ ] Create a thread page
-    - [ ] Option to navigate to specific email
+    - [x] Option to navigate to specific email
     - [ ] Option to navigate to first unread
     - [ ] collapse emails by default unless unread or focused
     - [ ] add reply box at the end and option to open the reply box under any

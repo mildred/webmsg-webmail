@@ -1,25 +1,36 @@
 <script>
   // vim: ft=html
-  import { async_derived, ready } from '../stores.js';
-  import { ctx } from '../context.js'
-  import { all_mailboxes_by_id } from '../mailboxes.js';
-  import { BarLoader } from 'svelte-loading-spinners';
-  import MailboxSettingsDialog from './MailboxSettingsDialog.svelte'
-  import SvgIcon from '@jamescoyle/svelte-icon';
   import * as mdi from '@mdi/js';
+  import { inview } from 'svelte-inview';
+
+  import { async_derived, ready, dig_store } from '../stores.js';
+  import { accountId } from '../context.js'
+  import { all_mailboxes_by_id } from '../mailboxes.js';
+  import { threads_store } from './threads.js'
+
+  import Time from "svelte-time";
+  import SvgIcon from '@jamescoyle/svelte-icon';
+  import { BarLoader } from 'svelte-loading-spinners';
+
+  import MailboxSettingsDialog from './MailboxSettingsDialog.svelte'
+  import EmailBody from './EmailBody.svelte';
+  import EmailIcon from './EmailIcon.svelte';
 
   export let mailboxId
 
   let settings_opened = false
 
-  let mailbox
-  $: mailbox = mailbox_store(mailboxId)
+  let mailbox, threads
+  $: mailbox = dig_store({}, all_mailboxes_by_id, ready(accountId), mailboxId)
+  $: threads = threads_store({accountId, mailboxId})
 
-  function mailbox_store(mailboxId) {
-    return async_derived({}, async () => {
-      const { accountId, jmap } = await ready(ctx, ctx => ctx.ready)
-      return all_mailboxes_by_id[accountId][mailboxId]
-    })
+  let expandedEmailId = null
+  function showThread(article, email) {
+    if (expandedEmailId == email.id) {
+      expandedEmailId = null
+    } else {
+      expandedEmailId = email.id
+    }
   }
 
 </script>
@@ -38,18 +49,53 @@
   </div>
   <h1>{$mailbox.name}</h1>
 
+  {#if $threads.total == null}
+  <p>loading emails...</p>
+  {:else}
+  <p>{$threads.total} emails in {$mailbox.name}</p>
+  {/if}
 
-  <div class="toolbar">
-    <div class="buttons">
-      <span class="button"><SvgIcon type='mdi' path={mdi.mdiViewList} /></span>
-      <span class="button"><SvgIcon type='mdi' path={mdi.mdiViewAgenda} /></span>
-    </div>
-
-    <div class="buttons">
-      <span class="button"><SvgIcon type='mdi' path={mdi.mdiFormatListChecks} /></span>
-      <span class="button"><SvgIcon type='mdi' path={mdi.mdiFormatListText} /></span>
-    </div>
-  </div>
+  {#each $threads.emails as email}
+    <a href="#/mail/mailbox/{mailboxId}/thread/{email.threadId}/email/{email.id}/"><article on:click={e => showThread(e.target, email)}>
+      <div class="icon">
+        <EmailIcon name={email.from[0].name} email={email.from[0].email} />
+        {#if email.thread && email.thread.emailIds.length > 1}
+          <div class="num-email">{email.thread.emailIds.length}</div>
+        {/if}
+      </div>
+      <div class="summary">
+        <div class="summary-content">
+          <div class="first-line">
+            <span class="subject">{email.subject}</span>
+          </div>
+          <div class="second-line">
+            <span class="author">{email.from[0].name}</span>
+            –
+            <span class="preview">{email.preview}</span>
+          </div>
+        </div>
+        <div class="date" title={email.receivedAt}>
+          <Time timestamp={email.receivedAt} format="ddd MMM D H:mm" />
+        </div>
+      </div>
+    </article></a>
+    {#if expandedEmailId == email.id}
+      <EmailBody email={email} show_header={false} />
+    {/if}
+  {/each}
+  <p class="loading-next"
+     use:inview={{}}
+     on:enter={(e) => {if ($threads.next) $threads.next()}}>
+    {$threads.emails.length} emails shown,
+    {#if $threads.more}
+      {$threads.more} more emails
+    {:else}
+      no more emails
+    {/if}
+    {#if $threads.next_loading}
+      <br/><BarLoader/>
+    {/if}
+  </p>
 
   {/if}
 </div>
@@ -143,40 +189,6 @@ article {
   white-space: nowrap;
   display: flex;
   align-items: center;
-}
-
-article:not(:hover) > .filters {
-  display: none;
-}
-
-.filters {
-  position: absolute;
-  top: 0;
-  right: 0;
-  background-color: white;
-  display: flex;
-  justify-content: flex-end;
-  flex-flow: row wrap;
-  width: 16rem;
-  flex: 0 0 16rem;
-  width: 8rem;
-}
-
-.filters > a {
-  display: block;
-  width: 7rem;
-  overflow: hidden;
-  white-space: nowrap;
-
-  margin: 0.25em;
-  background-color: #f8f8f8;
-  border-radius: 0.25em;
-  border: 1px solid #888;
-}
-
-.filters > a > svg {
-  width: 1em;
-  height: 1em;
 }
 
 p.loading-next {
