@@ -1,9 +1,8 @@
+import { JMAP } from './jmap.js'
 import { writable, derived, get } from 'svelte/store';
 export * from './utils/store.js';
 
 const prefix = 'app'
-
-export const jmap = writable(null)
 
 export const session = writable({
   default_value: true,
@@ -21,5 +20,19 @@ export const local = writable({
 
 local.subscribe(opts => {
   localStorage.setItem(`${prefix}.local`, JSON.stringify(opts))
+})
+
+export const jmap_url = writable({
+  // url: window.jmap_url,
+  ...JSON.parse(localStorage.getItem(`${prefix}.jmap_url`) || '{}')
+});
+
+jmap_url.subscribe(opts => {
+  localStorage.setItem(`${prefix}.jmap_url`, JSON.stringify(opts))
+})
+
+export const jmap = writable(null)
+jmap_url.subscribe(({url}) => {
+  if (url) jmap.set(new JMAP(url, session))
 })
 

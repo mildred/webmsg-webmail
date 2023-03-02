@@ -1,6 +1,6 @@
 <script>
   // vim: ft=html
-  import { session, get, jmap } from './stores.js'
+  import { session, local, get, jmap, jmap_url } from './stores.js'
   import { JMAP } from './jmap.js'
   import { Route, router } from 'tinro';
   import Inbox from './mail/Inbox.svelte'
@@ -12,7 +12,9 @@
   import { ctx } from './context.js'
   import { BarLoader } from 'svelte-loading-spinners';
 
-  jmap.set(new JMAP('https://test2.mx.webmsg.me', session))
+  if (!get(jmap_url).url) {
+    jmap_url.update(store => ({...store, url: prompt("JMAP URL:", window.jmap_url || "https://example.org")}))
+  }
 
   router.mode.hash()
   //addEventListener('hashchange', (e) => {

@@ -15,7 +15,11 @@ export function derived(stores, callback = null, ...args) {
 export function async_derived(initial_value, store) {
   return fancy(initial_value).init(async (_, {set, add_finalizer}) => {
     const actual_store = (typeof store == 'function') ? await store() : await store
-    add_finalizer(actual_store.subscribe(value => set(value)))
+    if (!actual_store.subscribe) {
+      set(actual_store)
+    } else {
+      add_finalizer(actual_store.subscribe(value => set(value)))
+    }
   })
 }
 

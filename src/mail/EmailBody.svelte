@@ -1,7 +1,7 @@
 <script>
   // vim: ft=html
 
-  import { ready, writable } from '../utils/store.js';
+  import { ready, writable, async_derived } from '../utils/store.js';
   import { purify } from '../utils/purify.js';
   import { onMount } from 'svelte';
   import EmailIcon from './EmailIcon.svelte';
@@ -9,6 +9,8 @@
   import Time from "svelte-time";
   import { inview } from 'svelte-inview';
   import { BarLoader } from 'svelte-loading-spinners';
+  import SvgIcon from '@jamescoyle/svelte-icon';
+  import * as mdi from '@mdi/js';
 
   export let email;
   export let show_header = true;
@@ -79,9 +81,28 @@
     return () => removeEventListener('load', fit_next_frame)
   }
 
+  let show_raw = false
+  let raw_email = null
+
+  async function load_raw() {
+    show_raw = ! show_raw
+    if (!show_raw) return
+    if (raw_email) return
+
+    const { accountId, jmap } = await ready(ctx, ctx => ctx.ready)
+
+    const name = `${email.id}.eml`
+    const type = "text/plain; charset=utf-8"
+    const { blobId } = email
+    raw_email = await jmap.blob_data(accountId, blobId, name, type)
+  }
+
 </script>
 
 <article class:unread={!email.keywords["$seen"]}>
+  <div class="actions">
+    <button on:click={load_raw}><SvgIcon type='mdi' path={mdi.mdiCodeTags} /></button>
+  </div>
   {#if show_header}
   <div class="row">
     <EmailIcon name={email.from[0].name} email={email.from[0].email} />
@@ -115,26 +136,45 @@
   {#if show_keywords}
     <p>Keywords: <em>{Object.keys(email.keywords).join(", ")}</em></p>
   {/if}
-  {#await body}
-    <p use:inview={{}} on:enter={show}>
-      {email.preview}
+  {#if show_raw}
+    {#if ! raw_email}
       <center><BarLoader/></center>
-    </p>
-  {:then body}
-    <!-- allow same origin in order to access frame content. Javascript shouldn't
-    load anyway, and external resources are blocked by default. Moreover, we are
-    not specifically a trusted origin, but that depends on the deployment.
-    Anyway, the origin is not a good way to separate contexts. -->
-    <!-- it's preferable to allow same-origin but not allow scripts -->
-    <iframe title=""
-            sandbox="allow-same-origin"
-            use:load_body={{}}>
-      <!--iframe sandbox src={URL.createObjectURL(blob)} bind:this={iframe}-->
-    </iframe>
-  {/await}
+    {:else}
+      <pre>{raw_email}</pre>
+    {/if}
+  {:else}
+    {#await body}
+      <p use:inview={{}} on:enter={show}>
+        {email.preview}
+        <center><BarLoader/></center>
+      </p>
+    {:then body}
+      <!-- allow same origin in order to access frame content. Javascript shouldn't
+      load anyway, and external resources are blocked by default. Moreover, we are
+      not specifically a trusted origin, but that depends on the deployment.
+      Anyway, the origin is not a good way to separate contexts. -->
+      <!-- it's preferable to allow same-origin but not allow scripts -->
+      <iframe title=""
+              sandbox="allow-same-origin"
+              use:load_body={{}}>
+        <!--iframe sandbox src={URL.createObjectURL(blob)} bind:this={iframe}-->
+      </iframe>
+    {/await}
+  {/if}
 </article>
 
 <style>
+  .actions {
+    float: right;
+  }
+
+  .actions > button {
+    border: 1px solid #888;
+    border-radius: 0.2rem;
+    background-color: transparent;
+    cursor: pointer;
+  }
+
   iframe {
     width: 100%;
     border: none;
