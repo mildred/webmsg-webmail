@@ -23,7 +23,7 @@ local.subscribe(opts => {
 })
 
 export const jmap_url = writable({
-  // url: window.jmap_url,
+  url: window.jmap_url,
   ...JSON.parse(localStorage.getItem(`${prefix}.jmap_url`) || '{}')
 });
 

@@ -103,6 +103,7 @@
     </a>
     <div class="filters" on:click={e => {e.stopPropagation(); filterEmailId = email.id}}>
       <a href="#"><SvgIcon type='mdi' path={mdi.mdiNoteMultiple} /> Filter</a>
+      <a href="#/mail/thread/{email.threadId}/email/{email.id}/"><SvgIcon type='mdi' path={mdi.mdiArrowExpandAll} /> Open</a>
       <!--
       <a href="#"><SvgIcon type='mdi' path={mdi.mdiHome} /> Home</a>
       <a href="#"><SvgIcon type='mdi' path={mdi.mdiGhost} /> Hidden</a>
@@ -118,7 +119,14 @@
       email={email} />
   {/if}
   {#if expandedEmailId == email.id}
-    <EmailBody email={email} show_header={false} />
+    <EmailBody email={email} show_header={false}>
+      <svelte:fragment slot="actions">
+        <a href="#/mail/thread/{email.threadId}/email/{email.id}/"
+           title="Open thread">
+          <SvgIcon type='mdi' path={mdi.mdiArrowExpandAll} />
+        </a>
+      </svelte:fragment>
+    </EmailBody>
   {/if}
 {/each}
 <p class="loading-next"
@@ -233,7 +241,6 @@ article:not(:hover) > .filters {
   flex-flow: row wrap;
   width: 16rem;
   flex: 0 0 16rem;
-  width: 8rem;
 }
 
 .filters > a {

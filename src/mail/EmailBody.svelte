@@ -101,6 +101,7 @@
 
 <article class:unread={!email.keywords["$seen"]}>
   <div class="actions">
+    <slot name="actions"></slot>
     <button on:click={load_raw}><SvgIcon type='mdi' path={mdi.mdiCodeTags} /></button>
   </div>
   {#if show_header}
@@ -168,11 +169,16 @@
     float: right;
   }
 
-  .actions > button {
+  .actions > :global(button),
+  .actions > :global(a) {
+    display: inline-block;
+    padding: 1px 4px;
     border: 1px solid #888;
     border-radius: 0.2rem;
     background-color: transparent;
     cursor: pointer;
+    text-decoration: none;
+    color: currentcolor;
   }
 
   iframe {
