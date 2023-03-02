@@ -13,7 +13,7 @@
   import { BarLoader } from 'svelte-loading-spinners';
 
   if (!get(jmap_url).url) {
-    jmap_url.update(store => ({...store, url: prompt("JMAP URL:", window.jmap_url || "https://example.org")}))
+    jmap_url.update(store => ({...store, url: prompt("JMAP URL:", window.jmap_url || window.default_jmap_url || "https://example.org")}))
   }
 
   router.mode.hash()
